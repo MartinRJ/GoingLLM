@@ -14,7 +14,7 @@ It shows you an input and output window, a send button and a progress bar at htt
 The tool takes a regular chat command, and submits it to the official ChatGPT-API.
 It will prompt the ChatGPT API to decide whether or not Google searches will be required to create a response. (If you add 'Perform an internet search' to your prompt, it will most likely do it every time.)
 Then if a Google search is required, the tool will generate further prompts to the ChatGPT API to ask it to create appropriate keywords for the research.
-Then it will use the Google Custon Search API to perform these searches, download the files temporarily in plaintext, and ask the ChatGPT API to extract the most important data from the results.
+Then it will use the Google Custom Search API to perform these searches, download the files temporarily in plaintext, and ask the ChatGPT API to extract the most important data from the results.
 Finally, it will send the collected result data together with the original prompt or question back to the ChatGPT API and show you the resulting answer.
 
 -----
