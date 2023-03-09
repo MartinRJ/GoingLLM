@@ -1,0 +1,1 @@
+web: gunicorn goingllm:app --timeout 145
