@@ -134,6 +134,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             # False in die keywords-Liste schreiben
             keywords = [False]
 
+        print("Keywords: " + response['choices'][0]['message']['content'], flush=True)
         ergebnis = False
         if not keywords:
             ergebnis = False
