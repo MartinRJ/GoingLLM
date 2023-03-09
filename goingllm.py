@@ -224,10 +224,10 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             ]
         )
         final_result = response['choices'][0]['message']['content']
-
+        print("Final result (unescaped): " + final_result, flush=True)
         final_result = final_result.replace('\\"', '＂')
-        final_result = final_result.replace('"', '＂')
         final_result = final_result.replace('\"', '＂')
+        final_result = final_result.replace('"', '＂')
 
     #html = markdown.markdown(responsemessage)
     writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + final_result + "\"}", task_id)
