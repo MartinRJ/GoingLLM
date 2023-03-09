@@ -53,8 +53,8 @@ FINALRESULT_MAX_TOKEN_LENGTH
 [The token length for the final result for ChatGPT. Note that in total (prompt+answer) you may not exceed 4096 tokens or the request will fail, and the request will easily already consume over 1200 tokens, often more.]
 
 MAX_FILE_CONTENT
-7450
-[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers.]
+7100
+[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers. If this is too long, the requests to the ChatGPT API may fail if they exceed 4096 tokens.]
 
 max_tokens_create_searchterms
 300
@@ -102,6 +102,7 @@ Better balancing of all the variables in settings.
 Possibly more stripping of unnecessary data/whitespace/formatting from the temporarily downloaded files.
 Implementing formatting (ChatML), but so far I haven't seen any attempts of the model to create ChatML. It could be as easy as adding "markdown.markdown(responsemessage)" before writing out the response.
 The option to continue a conversation, as right now these are always only single prompts.
+Also needed is a check of the token length before the actual requests to the ChatGPT API, in order to avoid errors if the maximum (4096) gets exceeded.
 
 
 
