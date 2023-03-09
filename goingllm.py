@@ -125,16 +125,17 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             ]
         )
         keywords = [False]
-        try:
-            daten = json.loads(response['choices'][0]['message']['content'])
-            # Die Liste der keywords aus dem Datenobjekt extrahieren
-            keywords = daten["keywords"]
-            # Einen Fehler abfangen, wenn der JSON-String ungültig oder leer ist
-        except (json.JSONDecodeError, KeyError):
-            # False in die keywords-Liste schreiben
+
+        #Attempt to extract the JSON object from the response
+        jsonobject = extract_json(response['choices'][0]['message']['content'])
+
+        if jsonobject:
+            # the function returned a list
+            keywords = jsonobject
+        else:
+            # the function returned False
             keywords = [False]
 
-        print("Keywords: " + response['choices'][0]['message']['content'], flush=True)
         ergebnis = False
         if not keywords:
             ergebnis = False
@@ -142,6 +143,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             ergebnis = True
         else:
             ergebnis = False
+            print("Not all entries in the keyword-array are strings. Cannot use the results.", flush=True)
         searchresults = []
         zaehler = 0
         anzahl_eintraege = text2num(ANZAHL_EINTRAEGE_AUSGESCHRIEBEN,"de")
@@ -230,6 +232,34 @@ def response_task(aufgabe, task_id, dogoogleoverride):
     #html = markdown.markdown(responsemessage)
     writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + final_result + "\"}", task_id)
     #return markdown.markdown(htmlstart + final_result)
+
+def extract_json(stringwithjson):
+    #find the JSON object
+    start = stringwithjson.find('{')
+    end = stringwithjson.find('}') + 1
+    if start == -1 or end == 0:
+        print("Error: JSON object not found", flush=True)
+        return False
+
+    json_string = stringwithjson[start:end]
+
+    #parse the JSON object
+    try:
+        data = json.loads(json_string)
+    except ValueError as e:
+        print("Error: Malformed JSON object", flush=True)
+        return False
+
+    keywords = []
+    #access the "keywords" array
+    if "keywords" in data:
+        keywords = data["keywords"]
+    else:
+        print("Error: JSON object doesn't contain 'keywords' array", flush=True)
+        return False
+
+    #return the result
+    return keywords
 
 def ja_oder_nein(string):
   # Eine boole'sche Variable als Rückgabewert definieren
