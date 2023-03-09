@@ -54,9 +54,14 @@ def startup():
         print("Es gab einen Fehler mit der Eingabe.", flush=True)
         return f'Error extracting body: {e}', 400
 
+    dogoogleoverride = False
+    always_google = request.headers.get('X-Always-Google')
+    if always_google and always_google.lower() == 'true':
+        dogoogleoverride = True
+
     #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
     task_id = str(uuid.uuid4())
-    threading.Thread(target=response_task, args=(body, task_id)).start()
+    threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
     writefile("{\"task_id\":\"" + task_id + "\",\"progress\":0}", task_id)
     response = make_response('', 200)
     response.headers['task_id'] = task_id
@@ -86,22 +91,28 @@ def writefile(json_object, task_id):
         # write JSON data to file
         json.dump(json_object, f)
 
-def response_task(aufgabe, task_id):
+def response_task(aufgabe, task_id, dogoogleoverride):
     if "<<" in aufgabe or ">>" in aufgabe:
         aufgabe = aufgabe.replace("<<", "»").replace(">>", "«")
 
     aufgabe = json.dumps(aufgabe)
-    response = openai.ChatCompletion.create(
-    model=MODEL,
-    temperature=TEMPERATURE_DECISION_TO_GOOGLE,
-    max_tokens=MAX_TOKENS_DECISION_TO_GOOGLE,
-    messages=[
-            {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"},
-            {"role": "user", "content": "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."}
-        ]
-    )
-    responsemessage = response['choices'][0]['message']['content']
-    dogooglesearch = ja_oder_nein(responsemessage)
+    #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
+    dogooglesearch = False
+    if not dogoogleoverride:
+        response = openai.ChatCompletion.create(
+        model=MODEL,
+        temperature=TEMPERATURE_DECISION_TO_GOOGLE,
+        max_tokens=MAX_TOKENS_DECISION_TO_GOOGLE,
+        messages=[
+                {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"},
+                {"role": "user", "content": "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."}
+            ]
+        )
+        responsemessage = response['choices'][0]['message']['content']
+        dogooglesearch = ja_oder_nein(responsemessage)
+    else:
+        dogooglesearch = True
+
     has_result = False
     if dogooglesearch:
         response = openai.ChatCompletion.create(
