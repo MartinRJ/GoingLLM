@@ -51,7 +51,7 @@ def startup():
             raise ValueError('Empty body')
         aufgabe = body
     except Exception as e:
-        print("Es gab einen Fehler mit der Eingabe.", flush=True)
+        print("There was an error with the input.", flush=True)
         return f'Error extracting body: {e}', 400
 
     dogoogleoverride = False
@@ -109,7 +109,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             ]
         )
         responsemessage = response['choices'][0]['message']['content']
-        dogooglesearch = ja_oder_nein(responsemessage)
+        dogooglesearch = yes_or_no(responsemessage)
     else:
         dogooglesearch = True
 
@@ -150,17 +150,17 @@ def response_task(aufgabe, task_id, dogoogleoverride):
         if not ergebnis == False:
             for keyword in keywords:
                 result = search_google(keyword)
-                # Überprüfe, ob das Ergebnis None ist
+                # Check if the result is None
                 if result is None:
-                    # Die Funktion hat einen Fehler zurückgegeben
-                    print("Es gab einen Fehler bei der Suche.", flush=True)
+                    # The function has returned an error
+                    print("There was an error in the search.", flush=True)
                 else:
-                    # Die Funktion hat eine Liste von URLs zurückgegeben
+                    # The function has returned a list of URLs
                     for URL in result:
                         percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * anzahl_eintraege)) * 100));
                         writefile("{\"task_id\":\"" + task_id + "\",\"progress\":" + percent + "}", task_id)
                         zaehler = zaehler + 1
-                        print("Hier sind die URLs: " + URL, flush=True)
+                        print("Here are the URLs: " + URL, flush=True)
                         dlfile = extract_content(URL)
                         if not dlfile == False:
                             responsemessage = dlfile
@@ -179,9 +179,11 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                             has_result = True
                         else:
                             responsemessage = "Error"
+                            print("Error summarizing URL content: " + URL, flush=True)
         else:
-            #keine Suchbegriffe
+            #no search terms
             has_result = False
+            print("No search terms.", flush=True)
 
         finalquery = "Zu der folgenden Anfrage: >>" + aufgabe + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
         has_text = False
@@ -202,17 +204,18 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                 ]
             )
             final_result = response['choices'][0]['message']['content']
+            final_result = escape_result(final_result)
             print("Final query completed.", flush=True)
             has_result = True
         else:
             has_result = False
-            print("Keine Suchresultate.", flush=True)
+            print("No search results.", flush=True)
     else:
         has_result = False
-        print("Assistant sagt anscheinend es soll keine Suche durchgeführt werden: " + responsemessage, flush=True)
+        print("GPT thinks, no search is required: " + responsemessage, flush=True)
 
     if not has_result:
-        print("Nichts gefunden, führe regulären Query durch.", flush=True)
+        print("Nothing found, making a regular query.", flush=True)
         #Make a regular query
         response = openai.ChatCompletion.create(
         model=MODEL,
@@ -224,14 +227,16 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             ]
         )
         final_result = response['choices'][0]['message']['content']
-        print("Final result (unescaped): " + final_result, flush=True)
-        final_result = final_result.replace('\\"', '＂')
-        final_result = final_result.replace('\"', '＂')
-        final_result = final_result.replace('"', '＂')
+        final_result = escape_result(final_result)
 
     #html = markdown.markdown(responsemessage)
     writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + final_result + "\"}", task_id)
     #return markdown.markdown(htmlstart + final_result)
+
+def escape_result(final_result):
+    print("Final result (unescaped): " + final_result, flush=True)
+    final_result = final_result.replace('"', '＂')
+    return final_result
 
 def extract_json(stringwithjson):
     #find the JSON object
@@ -261,41 +266,41 @@ def extract_json(stringwithjson):
     #return the result
     return keywords
 
-def ja_oder_nein(string):
-  # Eine boole'sche Variable als Rückgabewert definieren
+def yes_or_no(string):
+  # Define a boolean variable as return value
   ausgabe = True
 
-  # Versuchen, den Anfang des Strings zu überprüfen
+  # Try to check the beginning of the string
   try:
     if string.startswith("Nein"):
       ausgabe = False
     else:
-      # Standardmäßig "Ja" annehmen
+      # Assume "Yes" by default
       ausgabe = True
-  # Einen Fehler abfangen, wenn der String kein gültiger Parameter ist
+  # Catch an error if the string is not a valid parameter
   except AttributeError:
-    # Nichts tun und True zurückgeben
+    # Do nothing and return True
     pass
 
-  # Die Ausgabe zurückgeben
+  # Return the output
   return ausgabe
 
 def search_google(query):
-    # Initialisiere die API mit deinem Schlüssel und deiner Suchmaschine
+    # Initialise the API with your key and search engine
     service = build("customsearch", "v1", developerKey=CUSTOMSEARCH_KEY)
     cse = service.cse()
 
-    # Stelle eine Suchanfrage an die API
+    # Make a search request to the API
     response = cse.list(q=query, cx=CX).execute()
 
-    # Überprüfe, ob es Suchergebnisse gibt
+    # Check if there are search results
     if 'items' in response:
-        # Extrahiere die ersten drei URLs aus den Google-Suchergebnissen oder weniger, wenn es nicht genug gibt
+        # Extract the first three URLs from Google search results or less if there are not enough
         urls = [item['link'] for item in response['items'][:min(NUMBER_GOOGLE_RESULTS, len(response['items']))]]
         return urls
     else:
-        # Es gab keine Suchergebnisse für diese Anfrage
-        print("Es gab keine Suchergebnisse für diese Anfrage.", flush=True)
+        # There were no search results for this query
+        print("No search results for this query.", flush=True)
         return None
 
 def load_url_text(url):
@@ -349,9 +354,9 @@ def replace_newlines(text):
         text = text.replace("\n\n\n\n", "\n")
     return text
 
-# Eine Funktion definieren, die eine URL als Parameter nimmt und den Inhalt extrahiert
+# Define a function that takes a URL as a parameter and extracts the content
 def extract_content(url):
-    # Versuchen Sie, eine Anfrage an die URL zu senden und fangen Sie mögliche Ausnahmen ab
+    # Try to send a request to the URL and catch possible exceptions
     mimetype, encoding = mimetypes.guess_type(url)
     try:
         response = requests.head(url, timeout=(3, 8))
@@ -367,15 +372,15 @@ def extract_content(url):
         status_code = response.status_code
 
         try:
-            # Überprüfen Sie den Statuscode der Antwort
+            # Check the status code of the response
             if mimetype is None:
                 print("Could not determine mimetype for URL:" + url, flush=True)
                 mimetype = response.headers.get("content-type")
 
             if status_code == 200:
-                # Überprüfen Sie den Inhaltstyp der Antwort und behandeln Sie ihn entsprechend
+                # Check the content type of the response and handle it accordingly
                 if "application/pdf" in mimetype:
-                    # PDF-Inhalt verarbeiten
+                    # Process PDF content
                     filecontent = load_url_content(url)
                     if filecontent: 
                         pdf = PdfReader(BytesIO(filecontent))
@@ -391,12 +396,12 @@ def extract_content(url):
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
                     if bool(filecontent): 
-                        # HTML-Inhalt verarbeiten
-                        # Erstelle ein BeautifulSoup-Objekt aus dem HTML-String
+                        # Process HTML content
+                        # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
-                        # Finde das body-Element im HTML-Dokument
+                        # Find the body element in the HTML document
                         body = soup.body
-                        # Extrahiere den Text aus dem body-Element
+                        # Extract the text from the body element
                         html = body.get_text()
                         html = replace_newlines(html)
                         return html[:MAX_FILE_CONTENT]
@@ -405,13 +410,13 @@ def extract_content(url):
                 elif "text/plain" in mimetype:
                     filecontent = load_url_text(url)
                     if bool(filecontent):
-                        # Plaintext-Inhalt verarbeiten
+                        # Process plain text content
                         filecontent = replace_newlines(filecontent)
                         return filecontent[:MAX_FILE_CONTENT]
                     else:
                         return False
                 elif any(substring in mimetype for substring in ["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel.sheet.macroEnabled.12"]):
-                    # Excel-Inhalt verarbeiten
+                    # Process Excel content
                     filecontent = load_url_content(url)
                     if filecontent:
                         df = pd.read_csv(BytesIO(filecontent))
@@ -421,7 +426,7 @@ def extract_content(url):
                     else:
                         return False
                 elif "text/csv" in mimetype:
-                    #CSV-Inhalt verarbeiten
+                    Process #CSV content
                     filecontent = load_url_content(url)
                     if filecontent:
                         df = pd.read_csv(BytesIO(filecontent))
@@ -431,7 +436,7 @@ def extract_content(url):
                     else:
                         return False
                 elif any(substring in mimetype for substring in ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.ms-powerpoint.presentation.macroEnabled.12"]):
-                    # Powerpoint-Inhalt verarbeiten
+                    # Process PowerPoint content
                     filecontent = load_url_content(url)
                     if filecontent:
                         pr = Presentation(BytesIO(filecontent))
@@ -447,15 +452,15 @@ def extract_content(url):
                     else:
                         return False
                 else:
-                    # Der Inhaltstyp wird nicht unterstützt
+                    # The content type is not supported
                     print(f"Content type '{mimetype}' not supported", flush=True)
                     return False
             else:
-                # Die URL konnte nicht gefunden werden oder es gab einen anderen Fehler
+                # The URL could not be found or there was another error
                 print(f"Error retrieving URL: {status_code}", flush=True)
                 return False
         except Exception as e:
-            # Es gab einen anderen Fehler
+            # There was another error
             print(f"Error retrieving URL: {e}", flush=True)
             return False
 
