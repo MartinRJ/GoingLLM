@@ -270,6 +270,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     final_result = response['choices'][0]['message']['content']
                     #final_result = escape_result(final_result)
                     print("Final query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']), flush=True)
+                    debug_output(finalquery, system_prompt)
                     has_result = True
             else:
                 has_result = False
@@ -301,12 +302,25 @@ def response_task(aufgabe, task_id, dogoogleoverride):
 
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
-    #return markdown.markdown(htmlstart + final_result)
 
-#def escape_result(final_result):
-#    print("Final result (unescaped): " + final_result, flush=True)
-#    final_result = final_result.replace('"', '＂')
-#    return final_result
+def debug_output(string, system_prompt):
+    messages = [
+    {"role": "system", "content": system_prompt},
+    {"role": "user", "content": string}
+    ]
+    try:
+        # create a 'searches' directory if it does not exist
+        if not os.path.exists('searches'):
+            os.makedirs('searches')
+        # set the file path
+        file_path = f'searches/temp.json'
+        # open file in write mode
+        print("Writing debug output to /" + file_path, flush=True)
+        with open(file_path, 'w') as f:
+            # write JSON data to file
+            json.dump(messages, f)
+    except Exception as e:
+        print("Could not write file", flush=True)
 
 def extract_json(stringwithjson):
     #find the JSON object
