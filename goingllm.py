@@ -39,7 +39,7 @@ AUTH_UNAME = os.getenv('AUTH_UNAME')
 AUTH_PASS = os.getenv('AUTH_PASS')
 
 MODEL = os.getenv('model')
-MODEL_MAX_TOKEN = os.getenv('model_max_token')
+MODEL_MAX_TOKEN = int(os.getenv('model_max_token'))
 
 openai.api_key = SECRET_KEY
 
