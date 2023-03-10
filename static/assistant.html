@@ -201,7 +201,7 @@
 						// watch the counter
 						watchCounter();
 						// convert string to JSON
-						var data = xhr.responseText.json();
+						var data = JSON.parse(xhr.responseText);
 
 						if (data.hasOwnProperty("answer")) {
 								clearInterval(intervalId);
