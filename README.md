@@ -33,7 +33,7 @@ There is lots of debug output in the logs - you don't have to install Heroku CLI
 At the Heroku app's settings you will need to set all the following Config Vars, including the API keys and the ChatGPT API variables at https://dashboard.heroku.com/apps/YOURAPPNAME/settings with these exact names:
 
 NUMBER_OF_KEYWORDS
-4
+6
 [This number will be used to instruct the ChatGPT API how many keywords it should create.]
 
 AUTH_PASS
@@ -53,12 +53,12 @@ BODY_MAX_LENGTH
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH
-1000
+600
 [The token length for the final result for ChatGPT. Note that in total (prompt+answer) you may not exceed 4096 tokens or the request will fail, and the request will easily already consume over 1200 tokens, often more.]
 
 MAX_FILE_CONTENT
-12000
-[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers.]
+8200
+[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags, duplicate linebreaks and headers.]
 
 max_tokens_create_searchterms
 400
@@ -77,14 +77,14 @@ model_max_token
 [The max number of tokens that the selected model allows.]
 
 NUMBER_GOOGLE_RESULTS
-2
+6
 [The number of Google results for each keyword that will be temporarily downloaded.]
 
 SECRETKEY
 [Your secret OpenAI key.]
 
 SUMMARIZE_MAX_TOKEN_LENGTH
-300
+500
 [The ChatGPT token length for summarizing the individual Google search results.]
 
 temperature_create_searchterms
