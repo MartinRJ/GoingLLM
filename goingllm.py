@@ -337,7 +337,7 @@ def truncate_string_to_tokens(string, num_tokens):
     length = len(tokens)
 
     if length > num_tokens:
-        truncated_tokens = tokens.truncate(num_tokens) # truncate the tokens if they exceed the maximum
+        truncated_tokens = tokens[:num_tokens] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
