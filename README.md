@@ -70,7 +70,7 @@ max_tokens_decision_to_google
 
 model
 gpt-3.5-turbo
-[The OpenAI model, here it's GPT-3.5-turbo.]
+[The OpenAI model, here it's gpt-3.5-turbo.]
 
 model_max_token
 4096

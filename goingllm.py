@@ -333,14 +333,17 @@ def truncate_string_to_tokens(string, num_tokens):
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
+        print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
     tokens = enc.encode(string)
     length = len(tokens)
 
     if length > num_tokens:
+        print("Length: " + length + " tokens. Too long, truncating to " + num_tokens, flush=True)
         truncated_tokens = tokens[:num_tokens] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
+        print("Length: " + length + " tokens. Resuming.", flush=True)
         return string
 
 def yes_or_no(string):
