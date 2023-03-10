@@ -15,6 +15,7 @@ import requests
 import threading
 import tiktoken
 import time
+import urlextract import URLExtract
 import uuid
 app = Flask(__name__)
 
@@ -67,7 +68,7 @@ def startup():
         response.headers['task_id'] = task_id
         return response
     else:
-        aufgabe = body
+        usertask = body
         dogoogleoverride = False
         always_google = request.headers.get('X-Always-Google')
         if always_google and always_google.lower() == 'true':
@@ -121,13 +122,13 @@ def writefile(progress, json_data, task_id):
         print("Could not write file", flush=True)
 
 
-def response_task(aufgabe, task_id, dogoogleoverride):
-    if "<<" in aufgabe or ">>" in aufgabe:
-        aufgabe = aufgabe.replace("<<", "»").replace(">>", "«")
+def response_task(usertask, task_id, dogoogleoverride):
+    if "<<" in usertask or ">>" in usertask:
+        usertask = usertask.replace("<<", "»").replace(">>", "«")
 
     ALLURLS = []
 
-    aufgabe = json.dumps(aufgabe)
+    usertask = json.dumps(usertask)
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
     if not dogoogleoverride:
@@ -135,7 +136,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             print("Error, need at least 1 token for a query.", flush=True)
             final_result = "Error - need at least 1 token for a query."
         else:
-            prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
+            prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"
             prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
             response = openai.ChatCompletion.create(
@@ -166,7 +167,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             print("Error, need at least 1 token for a query.", flush=True)
             has_result = False
         else:
-            prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
+            prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + usertask + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
             prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
             response = openai.ChatCompletion.create(
@@ -203,6 +204,16 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             if not ergebnis == False:
                 for keyword in keywords:
                     result = search_google(keyword)
+
+                    # Check for links in the original task
+                    extractor = URLExtract()
+                    urls = extractor.find_urls(usertask)
+                    if len(urls) > 0:
+                        if result is None:
+                            result = urls
+                        else:
+                            result.append(urls)
+
                     # Check if the result is None
                     if result is None:
                         # The function has returned an error
@@ -225,7 +236,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
-                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
@@ -250,7 +261,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                 has_result = False
                 print("No search terms.", flush=True)
 
-            finalquery = "Zu der folgenden Anfrage: >>" + aufgabe + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+            finalquery = "Zu der folgenden Anfrage: >>" + usertask + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
             has_text = False
             for text in searchresults:
                 if len(text) > 0:
@@ -295,14 +306,14 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-            aufgabe = truncate_string_to_tokens(aufgabe, MAX_TOKENS_FINAL_RESULT, system_prompt)
+            usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_FINAL_RESULT,
             max_tokens=MAX_TOKENS_FINAL_RESULT,
             messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": aufgabe}
+                    {"role": "user", "content": usertask}
                 ]
             )
             final_result = response['choices'][0]['message']['content']
