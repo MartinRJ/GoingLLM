@@ -134,9 +134,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
-            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_DECISION_TO_GOOGLE
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"
-            prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
+            prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_DECISION_TO_GOOGLE,
@@ -167,8 +166,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
         else:
             prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_CREATE_SEARCHTERMS
-            prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
+            prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_CREATE_SEARCHTERMS,
@@ -224,8 +222,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-                                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_SUMMARIZE_RESULT
-                                    prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
+                                    prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
                                     response = openai.ChatCompletion.create(
                                     model=MODEL,
                                     temperature=TEMPERATURE_SUMMARIZE_RESULT,
@@ -259,9 +256,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     print("Error, need at least 1 token for a query.", flush=True)
                     has_result = False
                 else:
-                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-                    finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens, system_prompt)
+                    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, system_prompt)
                     response = openai.ChatCompletion.create(
                     model=MODEL,
                     temperature=TEMPERATURE_FINAL_RESULT,
@@ -289,9 +285,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             print("Error, need at least 1 token for a query.", flush=True)
             final_result = "Error - need at least 1 token for a query."
         else:
-            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
             system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-            aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens, system_prompt)
+            aufgabe = truncate_string_to_tokens(aufgabe, MAX_TOKENS_FINAL_RESULT, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_FINAL_RESULT,
@@ -348,29 +343,42 @@ def calculate_available_tokens(token_reserved_for_response):
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
 
-def truncate_string_to_tokens(string, num_tokens, system_prompt):
+def truncate_string_to_tokens(string, max_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
-    # num_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
-    base_tokens = 12 #Number of base-tokens for a request with system and user message, apparantly the cost in tokens for the JSON required to build a message with an empty system and user content
-    base_tokens = base_tokens + 1 #Fix for an error in the OpenAI API, which thinks that 4096 is greater than their limit of 4096
+    # max_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
+    base_tokens = 1 #Fix for an error in the OpenAI API, which thinks that 4096 is greater than their limit of 4096
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
         print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
-    tokens = enc.encode(string)
+
+    messages = [
+    {"role": "system", "content": system_prompt},
+    {"role": "user", "content": string}
+    ]
+    num_tokens = 0
+    for message in messages:
+        base_tokens += 4
+        num_tokens += 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
+        for key, value in message.items():
+            num_tokens += len(enc.encode(value))
+            if key == "name":  # if there's a name, the role is omitted
+                num_tokens += -1  # role is always required and always 1 token
+                base_tokens += -1
+    num_tokens += 2  # every reply is primed with <im_start>assistant
+    base_tokens += 2
+
     tokens_system = enc.encode(system_prompt)
-    length = len(tokens) + len(tokens_system)
-
-    max_length = num_tokens - len(tokens_system) - base_tokens
-
-    if length > max_length:
-        print("Length: " + str(length) + " tokens. Too long, truncating to " + str(max_length), flush=True)
-        truncated_tokens = tokens[:-max_length] # truncate the tokens if they exceed the maximum
+    possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens - len(tokens_system)
+    if (num_tokens > possible_tokens):
+        print("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens), flush=True)
+        tokens = enc.encode(string)
+        truncated_tokens = tokens[:-possible_tokens] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
-        print("Length: " + str(length) + " tokens. Resuming.", flush=True)
+        print("Length: " + str(num_tokens) + " tokens. Resuming.", flush=True)
         return string
 
 def yes_or_no(string):
