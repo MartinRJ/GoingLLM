@@ -205,8 +205,11 @@ def response_task(usertask, task_id, dogoogleoverride):
             zaehler = 0
             if not ergebnis == False:
                 for keyword in keywords:
-                    google_result = search_google(keyword)
-                    result = [result['url'] for result in google_result]
+                    search_google_result = search_google(keyword)
+                    google_result = []
+                    for search_result in search_google_result['searchresults']:
+                        for key in search_result:
+                            google_result.append(search_result[key]['url'])
                     # Let ChatGPT pick the most promising
 
                     if calculate_available_tokens(MAX_TOKENS_SELECT_SEARCHES_LENGTH) < 1:
@@ -234,7 +237,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                             sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
                             gpturls = {}
                             for index, _ in sorted_weighting:
-                                gpturls[index] = result[int(index)]['url']
+                                gpturls[index] = search_google_result['searchresults'][int(index)]['url']
                             results = gpturls
                         else:
                             # the function returned False, resume unaltered
@@ -485,15 +488,15 @@ def search_google(query):
         # Check if there are search results
         if 'items' in response:
             # Extract the first three URLs from Google search results or less if there are not enough
-            results = []
+            results = {"searchresults":[]}
+            count = 0
             for item in response['items'][:min(NUMBER_GOOGLE_RESULTS, len(response['items']))]:
                 result = {
-                    'id': item['cacheId'],
-                    'title': item['title'],
-                    'description': item['snippet'],
-                    'url': item['link']
+                    count: {"title":item['title'],
+                    'url': item['link'],
+                    'description': item['snippet']}
                 }
-                results.append(result)
+                results['searchresults'].append(result)
             return results
         else:
             # There were no search results for this query
