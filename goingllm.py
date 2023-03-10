@@ -222,7 +222,9 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+                                    debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
+                                    debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
                                     response = openai.ChatCompletion.create(
                                     model=MODEL,
                                     temperature=TEMPERATURE_SUMMARIZE_RESULT,
@@ -257,7 +259,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     has_result = False
                 else:
                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-                    debug_output("final query - untruncated", finalquery, system_prompt, 'w')
+                    debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
                     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, system_prompt)
                     response = openai.ChatCompletion.create(
                     model=MODEL,
@@ -271,7 +273,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     final_result = response['choices'][0]['message']['content']
                     #final_result = escape_result(final_result)
                     print("Final query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']), flush=True)
-                    debug_output("final query", finalquery, system_prompt, 'a')
+                    debug_output("final query", finalquery, system_prompt, 'a') #----Debug Output
                     has_result = True
             else:
                 has_result = False
@@ -362,7 +364,7 @@ def calculate_available_tokens(token_reserved_for_response):
 def truncate_string_to_tokens(string, max_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
     # max_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
-    base_tokens = 1 #Fix for an error in the OpenAI API, which thinks that 4096 is greater than their limit of 4096
+    base_tokens = 4 #Base value
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
@@ -379,11 +381,12 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
         num_tokens += 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
         for key, value in message.items():
             num_tokens += len(enc.encode(value))
+            base_tokens += 2
             if key == "name":  # if there's a name, the role is omitted
                 num_tokens += -1  # role is always required and always 1 token
                 base_tokens += -1
     num_tokens += 2  # every reply is primed with <im_start>assistant
-    base_tokens += 2
+    base_tokens += 4
 
     tokens_system = enc.encode(system_prompt)
     possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens
