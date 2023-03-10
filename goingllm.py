@@ -269,7 +269,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     )
                     final_result = response['choices'][0]['message']['content']
                     #final_result = escape_result(final_result)
-                    print("Final query completed.", flush=True)
+                    print("Final query completed. Usage = prompt_tokens: " + response['usage']['prompt_tokens'] + ", completion_tokens: " + response['usage']['completion_tokens'] + ", total_tokens: " + response['usage']['total_tokens'], flush=True)
                     has_result = True
             else:
                 has_result = False
