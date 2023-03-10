@@ -118,10 +118,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
-            numtokens = calculate_tokens(prompt)
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_DECISION_TO_GOOGLE
-            if numtokens > maxavailabletokens:
-                prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+            prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_DECISION_TO_GOOGLE,
@@ -151,10 +149,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             has_result = False
         else:
             prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
-            numtokens = calculate_tokens(prompt)
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_CREATE_SEARCHTERMS
-            if numtokens > maxavailabletokens:
-                prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+            prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_CREATE_SEARCHTERMS,
@@ -209,10 +205,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                     has_result = False
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)
-                                    numtokens = calculate_tokens(prompt)
                                     maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-                                    if numtokens > maxavailabletokens:
-                                        prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+                                    prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
                                     response = openai.ChatCompletion.create(
                                     model=MODEL,
                                     temperature=TEMPERATURE_SUMMARIZE_RESULT,
@@ -246,10 +240,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     print("Error, need at least 1 token for a query.", flush=True)
                     has_result = False
                 else:
-                    numtokens = calculate_tokens(finalquery)
                     maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-                    if numtokens > maxavailabletokens:
-                        finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens)
+                    finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens)
 
                     response = openai.ChatCompletion.create(
                     model=MODEL,
@@ -278,10 +270,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             print("Error, need at least 1 token for a query.", flush=True)
             final_result = "Error - need at least 1 token for a query."
         else:
-            numtokens = calculate_tokens(aufgabe)
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-            if numtokens > maxavailabletokens:
-                aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens)
+            aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_FINAL_RESULT,
@@ -337,15 +327,6 @@ def calculate_available_tokens(token_reserved_for_response):
         return 0
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
-
-def calculate_tokens(string):
-    #returns the number of tokens a string has
-    # Create a tokeniser with MODEL
-    tokeniser = tiktoken.Tokeniser(model=MODEL)
-    # Tokenise the string content and get the list of tokens
-    tokens = tokeniser.tokenise(string)
-    # Count the number of tokens
-    return len(tokens)
 
 def truncate_string_to_tokens(string, num_tokens):
     # Truncate string to specified number of tokens, if required
