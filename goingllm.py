@@ -220,7 +220,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
-                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche und zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
                                     response = openai.ChatCompletion.create(
@@ -257,6 +257,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     has_result = False
                 else:
                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+                    debug_output("final query - untruncated", finalquery, system_prompt, 'w')
                     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, system_prompt)
                     response = openai.ChatCompletion.create(
                     model=MODEL,
@@ -270,7 +271,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     final_result = response['choices'][0]['message']['content']
                     #final_result = escape_result(final_result)
                     print("Final query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']), flush=True)
-                    debug_output(finalquery, system_prompt)
+                    debug_output("final query", finalquery, system_prompt, 'a')
                     has_result = True
             else:
                 has_result = False
@@ -303,7 +304,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
 
-def debug_output(string, system_prompt):
+def debug_output(note, string, system_prompt, mode):
     messages = [
     {"role": "system", "content": system_prompt},
     {"role": "user", "content": string}
@@ -316,8 +317,9 @@ def debug_output(string, system_prompt):
         file_path = f'searches/temp.json'
         # open file in write mode
         print("Writing debug output to /" + file_path, flush=True)
-        with open(file_path, 'w') as f:
+        with open(file_path, mode) as f:
             # write JSON data to file
+            f.write(note + "\n")
             json.dump(messages, f)
     except Exception as e:
         print("Could not write file", flush=True)
