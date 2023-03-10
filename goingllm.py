@@ -15,7 +15,7 @@ import requests
 import threading
 import tiktoken
 import time
-import urlextract import URLExtract
+from urlextract import URLExtract
 import uuid
 app = Flask(__name__)
 
@@ -221,7 +221,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     else:
                         # The function has returned a list of URLs
                         for URL in result:
-                            percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)) * 100));
+                            percent = str(zaehler / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
                             writefile(percent, False, task_id)
                             zaehler = zaehler + 1
                             if URL in ALLURLS:
