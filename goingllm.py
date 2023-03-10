@@ -209,6 +209,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                     extractor = URLExtract()
                     urls = extractor.find_urls(usertask)
                     if len(urls) > 0:
+                        # use a list comprehension to add https:// to each url if needed
+                        urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
                         if result is None:
                             result = urls
                         else:
