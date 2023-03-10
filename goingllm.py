@@ -125,6 +125,8 @@ def response_task(aufgabe, task_id, dogoogleoverride):
     if "<<" in aufgabe or ">>" in aufgabe:
         aufgabe = aufgabe.replace("<<", "»").replace(">>", "«")
 
+    ALLURLS = []
+
     aufgabe = json.dumps(aufgabe)
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
@@ -211,6 +213,9 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                             percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)) * 100));
                             writefile(percent, False, task_id)
                             zaehler = zaehler + 1
+                            if URL in ALLURLS:
+                                continue
+                            ALLURLS.append(URL)
                             print("Here are the URLs: " + URL, flush=True)
                             dlfile = extract_content(URL)
                             if not dlfile == False:
