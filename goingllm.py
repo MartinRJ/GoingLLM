@@ -206,10 +206,13 @@ def response_task(usertask, task_id, dogoogleoverride):
             if not ergebnis == False:
                 for keyword in keywords:
                     search_google_result = search_google(keyword)
-                    google_result = []
+                    google_result = None
                     for search_result in search_google_result['searchresults']:
                         for key in search_result:
-                            google_result.append(search_result[key]['url'])
+                            if not google_result is None:
+                                google_result.append(search_result[key]['url'])
+                            else:
+                                google_result = [search_result[key]['url']]
                     # Let ChatGPT pick the most promising
 
                     if calculate_available_tokens(MAX_TOKENS_SELECT_SEARCHES_LENGTH) < 1:
@@ -250,18 +253,18 @@ def response_task(usertask, task_id, dogoogleoverride):
                     if len(urls) > 0:
                         # use a list comprehension to add https:// to each url if needed
                         urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
-                        if result is None:
-                            result = urls
+                        if google_result is None:
+                            google_result = urls
                         else:
-                            result[:0] = urls
+                            google_result[:0] = urls
 
                     # Check if the result is None
-                    if result is None:
+                    if google_result is None:
                         # The function has returned an error
                         print("There was an error in the search.", flush=True)
                     else:
                         # The function has returned a list of URLs
-                        for URL in result:
+                        for URL in google_result:
                             percent = str(zaehler / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
                             writefile(percent, False, task_id)
                             zaehler = zaehler + 1
