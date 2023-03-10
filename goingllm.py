@@ -380,18 +380,21 @@ def search_google(query):
     # Initialise the API with your key and search engine
     service = build("customsearch", "v1", developerKey=CUSTOMSEARCH_KEY)
     cse = service.cse()
+    try:
+        # Make a search request to the API
+        response = cse.list(q=query, cx=CX).execute()
 
-    # Make a search request to the API
-    response = cse.list(q=query, cx=CX).execute()
-
-    # Check if there are search results
-    if 'items' in response:
-        # Extract the first three URLs from Google search results or less if there are not enough
-        urls = [item['link'] for item in response['items'][:min(NUMBER_GOOGLE_RESULTS, len(response['items']))]]
-        return urls
-    else:
-        # There were no search results for this query
-        print("No search results for this query.", flush=True)
+        # Check if there are search results
+        if 'items' in response:
+            # Extract the first three URLs from Google search results or less if there are not enough
+            urls = [item['link'] for item in response['items'][:min(NUMBER_GOOGLE_RESULTS, len(response['items']))]]
+            return urls
+        else:
+            # There were no search results for this query
+            print("No search results for this query.", flush=True)
+            return None
+    except Exception as e:
+        print(f"Error in Google API query: {e}", Flush=True)
         return None
 
 def load_url_text(url):
@@ -517,7 +520,7 @@ def extract_content(url):
                     else:
                         return False
                 elif "text/csv" in mimetype:
-                    Process #CSV content
+                    # Process CSV content
                     filecontent = load_url_content(url)
                     if filecontent:
                         df = pd.read_csv(BytesIO(filecontent))
