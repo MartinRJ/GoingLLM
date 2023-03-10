@@ -333,9 +333,9 @@ def calculate_available_tokens(token_reserved_for_response):
         return MODEL_MAX_TOKEN - token_reserved_for_response
 
 def truncate_string_to_tokens(string, num_tokens, system_prompt):
-    base_tokens = 12 #Number of base-tokens for a request with system and user message
-    num_tokens = num_tokens + base_tokens
-    # Truncate string to specified number of tokens, if required
+    # Truncate string to specified number of tokens, if required.
+    # num_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
+    base_tokens = 12 #Number of base-tokens for a request with system and user message, apparantly the cost in tokens for the JSON required to build a message with an empty system and user content
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
@@ -345,9 +345,11 @@ def truncate_string_to_tokens(string, num_tokens, system_prompt):
     tokens_system = enc.encode(system_prompt)
     length = len(tokens) + len(tokens_system)
 
-    if length > num_tokens:
-        print("Length: " + str(length) + " tokens. Too long, truncating to " + str(num_tokens), flush=True)
-        truncated_tokens = tokens[:num_tokens] # truncate the tokens if they exceed the maximum
+    max_length = num_tokens - len(tokens_system) - base_tokens
+
+    if length > max_length:
+        print("Length: " + str(length) + " tokens. Too long, truncating to " + str(max_length), flush=True)
+        truncated_tokens = tokens[:max_length] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
