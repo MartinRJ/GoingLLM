@@ -53,7 +53,7 @@ BODY_MAX_LENGTH
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH
-2150
+1000
 [The token length for the final result for ChatGPT. Note that in total (prompt+answer) you may not exceed 4096 tokens or the request will fail, and the request will easily already consume over 1200 tokens, often more.]
 
 MAX_FILE_CONTENT
@@ -61,7 +61,7 @@ MAX_FILE_CONTENT
 [How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers.]
 
 max_tokens_create_searchterms
-300
+400
 [The ChatGPT token length for the creation of the search keywords.]
 
 max_tokens_decision_to_google
