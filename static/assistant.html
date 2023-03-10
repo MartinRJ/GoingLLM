@@ -105,6 +105,8 @@
 			<button id="submit">Send</button>
 		</div>
 		<script>
+			var fTimeout = 135.0; //seconds after which the search will time out.
+			var fUpdateFrequency = 3000; //milliseconds - the frequency for the repeated check for updates during a search.
 			// Define Mutex class
 			class Mutex {
 				constructor() {
@@ -181,8 +183,7 @@
 					
 					counter++;
 					// check if the counter has reached the maximum
-					if (counter === 35) {
-						
+					if (counter === parseInt(fTimeout/(fUpdateFrequency/1000))) {
 						clearInterval(intervalId);
 						var progressBar = document.getElementById("progress");
 						progressBar.style.width = "0%";
@@ -234,7 +235,7 @@
 						}
 					};
 					xhr.send();
-				}, 3000);
+				}, fUpdateFrequency);
 
 				// clear the input and update the height
 				input.value = '';
