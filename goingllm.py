@@ -242,7 +242,6 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                 else:
                     maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
                     finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens)
-
                     response = openai.ChatCompletion.create(
                     model=MODEL,
                     temperature=TEMPERATURE_FINAL_RESULT,
@@ -330,7 +329,10 @@ def calculate_available_tokens(token_reserved_for_response):
 
 def truncate_string_to_tokens(string, num_tokens):
     # Truncate string to specified number of tokens, if required
-    enc = tiktoken.get_encoding(MODEL)
+    try:
+        enc = tiktoken.encoding_for_model(MODEL)
+    except KeyError:
+        enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(string)
     length = len(tokens)
 
