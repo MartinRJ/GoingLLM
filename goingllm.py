@@ -350,7 +350,7 @@ def truncate_string_to_tokens(string, num_tokens, system_prompt):
 
     if length > max_length:
         print("Length: " + str(length) + " tokens. Too long, truncating to " + str(max_length), flush=True)
-        truncated_tokens = tokens[:max_length] # truncate the tokens if they exceed the maximum
+        truncated_tokens = tokens[-max_length:] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
