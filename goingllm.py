@@ -336,6 +336,7 @@ def truncate_string_to_tokens(string, num_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
     # num_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
     base_tokens = 12 #Number of base-tokens for a request with system and user message, apparantly the cost in tokens for the JSON required to build a message with an empty system and user content
+    base_tokens = base_tokens + 1 #Fix for an error in the OpenAI API, which thinks that 4096 is greater than their limit of 4096
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
