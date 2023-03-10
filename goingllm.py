@@ -202,13 +202,13 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                             if not dlfile == False:
                                 responsemessage = dlfile
 
-                                if calculate_available_tokens(MAX_TOKENS_FINAL_RESULT) < 1:
+                                if calculate_available_tokens(MAX_TOKENS_SUMMARIZE_RESULT) < 1:
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-                                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
+                                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_SUMMARIZE_RESULT
                                     prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
                                     response = openai.ChatCompletion.create(
                                     model=MODEL,
