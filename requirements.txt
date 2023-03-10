@@ -11,3 +11,4 @@ python-pptx==0.6.21
 beautifulsoup4==4.11.2
 whitenoise==6.4.0
 tiktoken==0.3.0
+urlextract==1.8.0

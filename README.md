@@ -87,6 +87,13 @@ SUMMARIZE_MAX_TOKEN_LENGTH
 500
 [The ChatGPT token length for summarizing the individual Google search results.]
 
+SELECT_SEARCHES_MAX_TOKEN_LENGTH
+256
+[The ChatGPT token length for selecting the most promising search results with weighting]
+
+temperature_select_searches
+0.4
+
 temperature_create_searchterms
 0.36
 
