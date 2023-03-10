@@ -386,7 +386,7 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
     base_tokens += 2
 
     tokens_system = enc.encode(system_prompt)
-    possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens - len(tokens_system)
+    possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens
     if (num_tokens > possible_tokens):
         print("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens), flush=True)
         tokens = enc.encode(string)
