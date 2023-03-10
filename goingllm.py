@@ -119,13 +119,14 @@ def response_task(aufgabe, task_id, dogoogleoverride):
         else:
             prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_DECISION_TO_GOOGLE
-            prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"
+            prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_DECISION_TO_GOOGLE,
             max_tokens=MAX_TOKENS_DECISION_TO_GOOGLE,
             messages=[
-                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ]
             )
@@ -149,14 +150,15 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             has_result = False
         else:
             prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
+            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_CREATE_SEARCHTERMS
-            prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+            prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_CREATE_SEARCHTERMS,
             max_tokens=MAX_TOKENS_CREATE_SEARCHTERMS,
             messages=[
-                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ]
             )
@@ -205,14 +207,15 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                                     has_result = False
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)
+                                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-                                    prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+                                    prompt = truncate_string_to_tokens(prompt, maxavailabletokens, system_prompt)
                                     response = openai.ChatCompletion.create(
                                     model=MODEL,
                                     temperature=TEMPERATURE_SUMMARIZE_RESULT,
                                     max_tokens=MAX_TOKENS_SUMMARIZE_RESULT,
                                     messages=[
-                                            {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                                            {"role": "system", "content": system_prompt},
                                             {"role": "user", "content": prompt}
                                         ]
                                     )
@@ -241,13 +244,14 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                     has_result = False
                 else:
                     maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-                    finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens)
+                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+                    finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens, system_prompt)
                     response = openai.ChatCompletion.create(
                     model=MODEL,
                     temperature=TEMPERATURE_FINAL_RESULT,
                     max_tokens=MAX_TOKENS_FINAL_RESULT,
                     messages=[
-                            {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                            {"role": "system", "content": system_prompt},
                             {"role": "user", "content": finalquery}
                         ]
                     )
@@ -270,13 +274,14 @@ def response_task(aufgabe, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
-            aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens)
+            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+            aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
             temperature=TEMPERATURE_FINAL_RESULT,
             max_tokens=MAX_TOKENS_FINAL_RESULT,
             messages=[
-                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": aufgabe}
                 ]
             )
@@ -327,7 +332,9 @@ def calculate_available_tokens(token_reserved_for_response):
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
 
-def truncate_string_to_tokens(string, num_tokens):
+def truncate_string_to_tokens(string, num_tokens, system_prompt):
+    base_tokens = 12 #Number of base-tokens for a request with system and user message
+    num_tokens = num_tokens + base_tokens
     # Truncate string to specified number of tokens, if required
     try:
         enc = tiktoken.encoding_for_model(MODEL)
@@ -335,7 +342,8 @@ def truncate_string_to_tokens(string, num_tokens):
         enc = tiktoken.get_encoding("cl100k_base")
         print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
     tokens = enc.encode(string)
-    length = len(tokens)
+    tokens_system = enc.encode(system_prompt)
+    length = len(tokens) + len(tokens_system)
 
     if length > num_tokens:
         print("Length: " + str(length) + " tokens. Too long, truncating to " + str(num_tokens), flush=True)
