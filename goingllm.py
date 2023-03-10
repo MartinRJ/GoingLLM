@@ -62,7 +62,7 @@ def startup():
         task_id = str(uuid.uuid4())
         errormessage = "Input is too long."
         print(errormessage, flush=True)
-        writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + errormessage + "\"}", task_id)
+        writefile(100, errormessage, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
         return response
@@ -76,7 +76,7 @@ def startup():
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid.uuid4())
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
-        writefile("{\"task_id\":\"" + task_id + "\",\"progress\":0}", task_id)
+        writefile(0, False, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
         return response
@@ -93,17 +93,33 @@ def index():
 def static_files(path):
     return send_from_directory(os.path.join(app.root_path, 'static'), path)
 
-def writefile(json_object, task_id):
-    # create a 'searches' directory if it does not exist
-    if not os.path.exists('searches'):
-        os.makedirs('searches')
-    # set the file path
-    file_path = f'searches/{task_id}.json'
-    # open file in write mode
-    print("Writing to /" + file_path, flush=True)
-    with open(file_path, 'w') as f:
-        # write JSON data to file
-        json.dump(json_object, f)
+def writefile(progress, json_data, task_id):
+    data = {}
+    if not json_data:
+        data = {
+            "task_id": task_id,
+            "progress": progress
+        }
+    else:
+        data = {
+            "task_id": task_id,
+            "progress": progress,
+            "answer": json_data
+        }
+    try:
+        # create a 'searches' directory if it does not exist
+        if not os.path.exists('searches'):
+            os.makedirs('searches')
+        # set the file path
+        file_path = f'searches/{task_id}.json'
+        # open file in write mode
+        print("Writing to /" + file_path, flush=True)
+        with open(file_path, 'w') as f:
+            # write JSON data to file
+            f.write(json.dumps(data))
+    except Exception as e:
+        print("Could not write file", flush=True)
+
 
 def response_task(aufgabe, task_id, dogoogleoverride):
     if "<<" in aufgabe or ">>" in aufgabe:
@@ -195,7 +211,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                         # The function has returned a list of URLs
                         for URL in result:
                             percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)) * 100));
-                            writefile("{\"task_id\":\"" + task_id + "\",\"progress\":" + percent + "}", task_id)
+                            writefile(percent, False, task_id)
                             zaehler = zaehler + 1
                             print("Here are the URLs: " + URL, flush=True)
                             dlfile = extract_content(URL)
@@ -256,7 +272,7 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                         ]
                     )
                     final_result = response['choices'][0]['message']['content']
-                    final_result = escape_result(final_result)
+                    #final_result = escape_result(final_result)
                     print("Final query completed.", flush=True)
                     has_result = True
             else:
@@ -286,16 +302,16 @@ def response_task(aufgabe, task_id, dogoogleoverride):
                 ]
             )
             final_result = response['choices'][0]['message']['content']
-            final_result = escape_result(final_result)
+            #final_result = escape_result(final_result)
 
     #html = markdown.markdown(responsemessage)
-    writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + final_result + "\"}", task_id)
+    writefile(100, final_result, task_id)
     #return markdown.markdown(htmlstart + final_result)
 
-def escape_result(final_result):
-    print("Final result (unescaped): " + final_result, flush=True)
-    final_result = final_result.replace('"', '＂')
-    return final_result
+#def escape_result(final_result):
+#    print("Final result (unescaped): " + final_result, flush=True)
+#    final_result = final_result.replace('"', '＂')
+#    return final_result
 
 def extract_json(stringwithjson):
     #find the JSON object

@@ -200,11 +200,8 @@
 					if (xhr.status === 200) {
 						// watch the counter
 						watchCounter();
-						// remove the double quotes from the JSON string
-						
-						const parsedJsonString = xhr.responseText.replace(/\\"/g, '"').replace(/\\\\/g, '\\').slice(1, -1);
-
-						var data = JSON.parse(parsedJsonString);
+						// convert string to JSON
+						var data = xhr.responseText.json();
 
 						if (data.hasOwnProperty("answer")) {
 								clearInterval(intervalId);
