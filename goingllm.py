@@ -212,7 +212,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                         if result is None:
                             result = urls
                         else:
-                            result.append(urls)
+                            result.extend(urls)
 
                     # Check if the result is None
                     if result is None:
