@@ -5,14 +5,15 @@ from io import BytesIO
 import json
 import markdown
 import mimetypes
+from num2words import num2words
 import openai
 import os
 import pandas as pd
 from pptx import Presentation
 from PyPDF2 import PdfReader
 import requests
-from text_to_num import text2num
 import threading
+import tiktoken
 import time
 import uuid
 app = Flask(__name__)
@@ -28,14 +29,18 @@ TEMPERATURE_SUMMARIZE_RESULT = float(os.getenv('temperature_summarize_result'))
 MAX_TOKENS_SUMMARIZE_RESULT = int(os.getenv('SUMMARIZE_MAX_TOKEN_LENGTH'))
 MAX_FILE_CONTENT = int(os.getenv('MAX_FILE_CONTENT'))
 NUMBER_GOOGLE_RESULTS = int(os.getenv('NUMBER_GOOGLE_RESULTS'))
-ANZAHL_EINTRAEGE_AUSGESCHRIEBEN = os.getenv('ANZAHL_EINTRAEGE')
+NUMBER_OF_KEYWORDS = int(os.getenv('NUMBER_OF_KEYWORDS'))
 TEMPERATURE_FINAL_RESULT = float(os.getenv('temperature_final_result'))
 MAX_TOKENS_FINAL_RESULT = int(os.getenv('FINALRESULT_MAX_TOKEN_LENGTH'))
+BODY_MAX_LENGTH = int(os.getenv('BODY_MAX_LENGTH'))
 
 #BASIC AUTHENTICATION
 AUTH_UNAME = os.getenv('AUTH_UNAME')
 AUTH_PASS = os.getenv('AUTH_PASS')
+
 MODEL = os.getenv('model')
+MODEL_MAX_TOKEN = os.getenv('model_max_token')
+
 openai.api_key = SECRET_KEY
 
 @app.route("/", methods=['POST'])
@@ -49,23 +54,32 @@ def startup():
         body = request.get_data(as_text=True)
         if not body:
             raise ValueError('Empty body')
-        aufgabe = body
     except Exception as e:
         print("There was an error with the input.", flush=True)
         return f'Error extracting body: {e}', 400
 
-    dogoogleoverride = False
-    always_google = request.headers.get('X-Always-Google')
-    if always_google and always_google.lower() == 'true':
-        dogoogleoverride = True
+    if len(body) > BODY_MAX_LENGTH:
+        task_id = str(uuid.uuid4())
+        errormessage = "Input is too long."
+        print(errormessage, flush=True)
+        writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + errormessage + "\"}", task_id)
+        response = make_response('', 200)
+        response.headers['task_id'] = task_id
+        return response
+    else:
+        aufgabe = body
+        dogoogleoverride = False
+        always_google = request.headers.get('X-Always-Google')
+        if always_google and always_google.lower() == 'true':
+            dogoogleoverride = True
 
-    #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
-    task_id = str(uuid.uuid4())
-    threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
-    writefile("{\"task_id\":\"" + task_id + "\",\"progress\":0}", task_id)
-    response = make_response('', 200)
-    response.headers['task_id'] = task_id
-    return response
+        #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
+        task_id = str(uuid.uuid4())
+        threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
+        writefile("{\"task_id\":\"" + task_id + "\",\"progress\":0}", task_id)
+        response = make_response('', 200)
+        response.headers['task_id'] = task_id
+        return response
 
 @app.route('/searches/<filename>')
 def download_file(filename):
@@ -99,117 +113,160 @@ def response_task(aufgabe, task_id, dogoogleoverride):
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
     if not dogoogleoverride:
-        response = openai.ChatCompletion.create(
-        model=MODEL,
-        temperature=TEMPERATURE_DECISION_TO_GOOGLE,
-        max_tokens=MAX_TOKENS_DECISION_TO_GOOGLE,
-        messages=[
-                {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"},
-                {"role": "user", "content": "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."}
-            ]
-        )
-        responsemessage = response['choices'][0]['message']['content']
-        dogooglesearch = yes_or_no(responsemessage)
+        if calculate_available_tokens(MAX_TOKENS_DECISION_TO_GOOGLE) < 1:
+            print("Error, need at least 1 token for a query.", flush=True)
+            final_result = "Error - need at least 1 token for a query."
+        else:
+            prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
+            numtokens = calculate_tokens(prompt)
+            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_DECISION_TO_GOOGLE
+            if numtokens > maxavailabletokens:
+                prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+            response = openai.ChatCompletion.create(
+            model=MODEL,
+            temperature=TEMPERATURE_DECISION_TO_GOOGLE,
+            max_tokens=MAX_TOKENS_DECISION_TO_GOOGLE,
+            messages=[
+                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte nur mit 'Ja.' oder 'Nein.'"},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            responsemessage = response['choices'][0]['message']['content']
+            dogooglesearch = yes_or_no(responsemessage)
     else:
         dogooglesearch = True
 
     has_result = False
     if dogooglesearch:
-        response = openai.ChatCompletion.create(
-        model=MODEL,
-        temperature=TEMPERATURE_CREATE_SEARCHTERMS,
-        max_tokens=MAX_TOKENS_CREATE_SEARCHTERMS,
-        messages=[
-                {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
-                {"role": "user", "content": "Bitte gib das JSON-Objekt als Antwort zurück, das "+ ANZAHL_EINTRAEGE_AUSGESCHRIEBEN + " Einträge mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ ANZAHL_EINTRAEGE_AUSGESCHRIEBEN + " Suchen in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."}
-            ]
-        )
-        keywords = [False]
-
-        #Attempt to extract the JSON object from the response
-        jsonobject = extract_json(response['choices'][0]['message']['content'])
-
-        if jsonobject:
-            # the function returned a list
-            keywords = jsonobject
+        number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
+        if NUMBER_OF_KEYWORDS == 1:
+            number_entries = "einen Eintrag"
+            number_searches = "eine Suche"
         else:
-            # the function returned False
-            keywords = [False]
+            number_entries = number_keywords + " Einträge"
+            number_searches = number_keywords + "Suchen"
 
-        ergebnis = False
-        if not keywords:
-            ergebnis = False
-        elif all(isinstance(item, str) for item in keywords):
-            ergebnis = True
-        else:
-            ergebnis = False
-            print("Not all entries in the keyword-array are strings. Cannot use the results.", flush=True)
-        searchresults = []
-        zaehler = 0
-        anzahl_eintraege = text2num(ANZAHL_EINTRAEGE_AUSGESCHRIEBEN,"de")
-        if not ergebnis == False:
-            for keyword in keywords:
-                result = search_google(keyword)
-                # Check if the result is None
-                if result is None:
-                    # The function has returned an error
-                    print("There was an error in the search.", flush=True)
-                else:
-                    # The function has returned a list of URLs
-                    for URL in result:
-                        percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * anzahl_eintraege)) * 100));
-                        writefile("{\"task_id\":\"" + task_id + "\",\"progress\":" + percent + "}", task_id)
-                        zaehler = zaehler + 1
-                        print("Here are the URLs: " + URL, flush=True)
-                        dlfile = extract_content(URL)
-                        if not dlfile == False:
-                            responsemessage = dlfile
-
-                            response = openai.ChatCompletion.create(
-                            model=MODEL,
-                            temperature=TEMPERATURE_SUMMARIZE_RESULT,
-                            max_tokens=MAX_TOKENS_SUMMARIZE_RESULT,
-                            messages=[
-                                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
-                                    {"role": "user", "content": "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)}
-                                ]
-                            )
-                            result_summary = response['choices'][0]['message']['content']
-                            searchresults.append(result_summary)
-                            has_result = True
-                        else:
-                            responsemessage = "Error"
-                            print("Error summarizing URL content: " + URL, flush=True)
-        else:
-            #no search terms
+        if calculate_available_tokens(MAX_TOKENS_CREATE_SEARCHTERMS) < 1:
+            print("Error, need at least 1 token for a query.", flush=True)
             has_result = False
-            print("No search terms.", flush=True)
-
-        finalquery = "Zu der folgenden Anfrage: >>" + aufgabe + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
-        has_text = False
-        for text in searchresults:
-            if len(text) > 0:
-                has_text = True
-                finalquery += json.dumps(text)
-
-        if has_text:
-            print("Final result found, making final query.", flush=True)
+        else:
+            prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgendem Thema mittels einer Google-Suche zu finden: >>" + aufgabe + "<<. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten."
+            numtokens = calculate_tokens(prompt)
+            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_CREATE_SEARCHTERMS
+            if numtokens > maxavailabletokens:
+                prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
             response = openai.ChatCompletion.create(
             model=MODEL,
-            temperature=TEMPERATURE_FINAL_RESULT,
-            max_tokens=MAX_TOKENS_FINAL_RESULT,
+            temperature=TEMPERATURE_CREATE_SEARCHTERMS,
+            max_tokens=MAX_TOKENS_CREATE_SEARCHTERMS,
             messages=[
                     {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
-                    {"role": "user", "content": finalquery}
+                    {"role": "user", "content": prompt}
                 ]
             )
-            final_result = response['choices'][0]['message']['content']
-            final_result = escape_result(final_result)
-            print("Final query completed.", flush=True)
-            has_result = True
-        else:
-            has_result = False
-            print("No search results.", flush=True)
+            keywords = [False]
+
+            #Attempt to extract the JSON object from the response
+            jsonobject = extract_json(response['choices'][0]['message']['content'])
+
+            if jsonobject:
+                # the function returned a list
+                keywords = jsonobject
+            else:
+                # the function returned False
+                keywords = [False]
+
+            ergebnis = False
+            if not keywords:
+                ergebnis = False
+            elif all(isinstance(item, str) for item in keywords):
+                ergebnis = True
+            else:
+                ergebnis = False
+                print("Not all entries in the keyword-array are strings. Cannot use the results.", flush=True)
+            searchresults = []
+            zaehler = 0
+            if not ergebnis == False:
+                for keyword in keywords:
+                    result = search_google(keyword)
+                    # Check if the result is None
+                    if result is None:
+                        # The function has returned an error
+                        print("There was an error in the search.", flush=True)
+                    else:
+                        # The function has returned a list of URLs
+                        for URL in result:
+                            percent = str(((zaehler / (NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)) * 100));
+                            writefile("{\"task_id\":\"" + task_id + "\",\"progress\":" + percent + "}", task_id)
+                            zaehler = zaehler + 1
+                            print("Here are the URLs: " + URL, flush=True)
+                            dlfile = extract_content(URL)
+                            if not dlfile == False:
+                                responsemessage = dlfile
+
+                                if calculate_available_tokens(MAX_TOKENS_FINAL_RESULT) < 1:
+                                    print("Error, need at least 1 token for a query.", flush=True)
+                                    has_result = False
+                                else:
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + aufgabe + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können:\n\n" + json.dumps(responsemessage)
+                                    numtokens = calculate_tokens(prompt)
+                                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
+                                    if numtokens > maxavailabletokens:
+                                        prompt = truncate_string_to_tokens(prompt, maxavailabletokens)
+                                    response = openai.ChatCompletion.create(
+                                    model=MODEL,
+                                    temperature=TEMPERATURE_SUMMARIZE_RESULT,
+                                    max_tokens=MAX_TOKENS_SUMMARIZE_RESULT,
+                                    messages=[
+                                            {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                                            {"role": "user", "content": prompt}
+                                        ]
+                                    )
+                                    result_summary = response['choices'][0]['message']['content']
+                                    searchresults.append(result_summary)
+                                    has_result = True
+                            else:
+                                responsemessage = "Error"
+                                print("Error summarizing URL content: " + URL, flush=True)
+            else:
+                #no search terms
+                has_result = False
+                print("No search terms.", flush=True)
+
+            finalquery = "Zu der folgenden Anfrage: >>" + aufgabe + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+            has_text = False
+            for text in searchresults:
+                if len(text) > 0:
+                    has_text = True
+                    finalquery += json.dumps(text)
+
+            if has_text:
+                print("Final result found, making final query.", flush=True)
+                if calculate_available_tokens(MAX_TOKENS_FINAL_RESULT) < 1:
+                    print("Error, need at least 1 token for a query.", flush=True)
+                    has_result = False
+                else:
+                    numtokens = calculate_tokens(finalquery)
+                    maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
+                    if numtokens > maxavailabletokens:
+                        finalquery = truncate_string_to_tokens(finalquery, maxavailabletokens)
+
+                    response = openai.ChatCompletion.create(
+                    model=MODEL,
+                    temperature=TEMPERATURE_FINAL_RESULT,
+                    max_tokens=MAX_TOKENS_FINAL_RESULT,
+                    messages=[
+                            {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                            {"role": "user", "content": finalquery}
+                        ]
+                    )
+                    final_result = response['choices'][0]['message']['content']
+                    final_result = escape_result(final_result)
+                    print("Final query completed.", flush=True)
+                    has_result = True
+            else:
+                has_result = False
+                print("No search results.", flush=True)
     else:
         has_result = False
         print("GPT thinks, no search is required: " + responsemessage, flush=True)
@@ -217,17 +274,25 @@ def response_task(aufgabe, task_id, dogoogleoverride):
     if not has_result:
         print("Nothing found, making a regular query.", flush=True)
         #Make a regular query
-        response = openai.ChatCompletion.create(
-        model=MODEL,
-        temperature=TEMPERATURE_FINAL_RESULT,
-        max_tokens=MAX_TOKENS_FINAL_RESULT,
-        messages=[
-                {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
-                {"role": "user", "content": aufgabe}
-            ]
-        )
-        final_result = response['choices'][0]['message']['content']
-        final_result = escape_result(final_result)
+        if calculate_available_tokens(MAX_TOKENS_FINAL_RESULT) < 1:
+            print("Error, need at least 1 token for a query.", flush=True)
+            final_result = "Error - need at least 1 token for a query."
+        else:
+            numtokens = calculate_tokens(aufgabe)
+            maxavailabletokens = MODEL_MAX_TOKEN - MAX_TOKENS_FINAL_RESULT
+            if numtokens > maxavailabletokens:
+                aufgabe = truncate_string_to_tokens(aufgabe, maxavailabletokens)
+            response = openai.ChatCompletion.create(
+            model=MODEL,
+            temperature=TEMPERATURE_FINAL_RESULT,
+            max_tokens=MAX_TOKENS_FINAL_RESULT,
+            messages=[
+                    {"role": "system", "content": "Ich bin dein persönlicher Assistent für die Internetrecherche"},
+                    {"role": "user", "content": aufgabe}
+                ]
+            )
+            final_result = response['choices'][0]['message']['content']
+            final_result = escape_result(final_result)
 
     #html = markdown.markdown(responsemessage)
     writefile("{\"task_id\":\"" + task_id + "\",\"progress\":100,\"answer\":\"" + final_result + "\"}", task_id)
@@ -265,6 +330,35 @@ def extract_json(stringwithjson):
 
     #return the result
     return keywords
+
+def calculate_available_tokens(token_reserved_for_response):
+    #Calculates the available tokens for a request, taking into account the Tokens reserved for the response
+    if token_reserved_for_response > MODEL_MAX_TOKEN:
+        return 0
+    else:
+        return MODEL_MAX_TOKEN - token_reserved_for_response
+
+def calculate_tokens(string):
+    #returns the number of tokens a string has
+    # Create a tokeniser with MODEL
+    tokeniser = tiktoken.Tokeniser(model=MODEL)
+    # Tokenise the string content and get the list of tokens
+    tokens = tokeniser.tokenise(string)
+    # Count the number of tokens
+    return len(tokens)
+
+def truncate_string_to_tokens(string, num_tokens):
+    # Truncate string to specified number of tokens, if required
+    enc = tiktoken.get_encoding(MODEL)
+    tokens = enc.encode(string)
+    length = len(tokens)
+
+    if length > num_tokens:
+        truncated_tokens = tokens.truncate(num_tokens) # truncate the tokens if they exceed the maximum
+        truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
+        return truncated_string
+    else:
+        return string
 
 def yes_or_no(string):
   # Define a boolean variable as return value

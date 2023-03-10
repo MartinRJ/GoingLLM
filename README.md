@@ -32,9 +32,9 @@ There is lots of debug output in the logs - you don't have to install Heroku CLI
 
 At the Heroku app's settings you will need to set all the following Config Vars, including the API keys and the ChatGPT API variables at https://dashboard.heroku.com/apps/YOURAPPNAME/settings with these exact names:
 
-ANZAHL_EINTRAEGE
-vier
-[German, a number written out in full, that will be used to instruct the ChatGPT API how many keywords it should create.]
+NUMBER_OF_KEYWORDS
+4
+[This number will be used to instruct the ChatGPT API how many keywords it should create.]
 
 AUTH_PASS
 [Your Basic Auth password, for a quick-and-dirty authentication implementation.]
@@ -48,13 +48,17 @@ CUSTOMSEARCHKEY
 cx
 [Your Google Custom Search API 'CX' key.]
 
+BODY_MAX_LENGTH
+20000
+[Absolute max length of the input that the tool will allow.]
+
 FINALRESULT_MAX_TOKEN_LENGTH
 2150
 [The token length for the final result for ChatGPT. Note that in total (prompt+answer) you may not exceed 4096 tokens or the request will fail, and the request will easily already consume over 1200 tokens, often more.]
 
 MAX_FILE_CONTENT
-7000
-[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers. If this is too long, the requests to the ChatGPT API may fail if they exceed 4096 tokens.]
+12000
+[How many bytes will be downloaded from the Google search results, this is AFTER stripping all html tags and duplicate linebreaks and headers.]
 
 max_tokens_create_searchterms
 300
@@ -67,6 +71,10 @@ max_tokens_decision_to_google
 model
 gpt-3.5-turbo
 [The OpenAI model, here it's GPT-3.5-turbo.]
+
+model_max_token
+4096
+[The max number of tokens that the selected model allows.]
 
 NUMBER_GOOGLE_RESULTS
 2
@@ -92,8 +100,11 @@ temperature_summarize_result
 0.2
 [The temperature values for the various ChatGPT prompts. Lower means more factual, higher means more creative. Between 0 and 1. OpenAI recommends 0.2 or higher.]
 
+All token maximums determine how many tokens will be reserved for the response. The tool will truncate the input for each request to the OpenAI API, to make sure answer+response never exceed "model_max_token" tokens in sum (4096 for the ChatGPT API). The most relevant numbers here are NUMBER_GOOGLE_RESULTS, MAX_FILE_CONTENT and NUMBER_OF_KEYWORDS, because this will have impact on the execution time of the script.
 
 Note that the API requests are not free. Use this at your own risk. If you sign up for a basic, free Google Custom Search API key, you can do 100 free searches/day at the time of writing.
+
+If you are using this for a public API, you might consider adding aufgabe = bleach.clean(body) and import bleach, or something similar, to sanitize input, at the top of the python script.
 
 -----
 To Do:
