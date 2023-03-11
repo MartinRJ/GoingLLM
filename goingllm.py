@@ -282,7 +282,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                 else:
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-                                    #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
+                                    debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
                                     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
                                     response = openai.ChatCompletion.create(
