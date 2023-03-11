@@ -295,7 +295,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                         ]
                                     )
                                     result_summary = response['choices'][0]['message']['content']
-                                    debug_output("Page content - result", prompt, result_summary, 'w')
+                                    debug_output("Page content - result", result_summary, system_prompt, 'w')
                                     searchresults.append(result_summary)
                                     has_result = True
                             else:
