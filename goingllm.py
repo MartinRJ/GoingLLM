@@ -206,7 +206,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             if not ergebnis == False:
                 for keyword in keywords:
                     search_google_result = search_google(keyword)
-                    print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True)
+                    #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
                     google_result = None
                     for search_result in search_google_result['searchresults']:
                         for key in search_result:
@@ -241,7 +241,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                             sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
                             gpturls = {}
                             for index, _ in sorted_weighting:
-                                gpturls[index] = search_google_result['searchresults'][index]['url']
+                                gpturls[index] = search_google_result['searchresults'][int(index)]['url']
                             results = gpturls
                         else:
                             # the function returned False, resume unaltered
@@ -517,6 +517,7 @@ def search_google(query):
                     "description": item["snippet"]}
                 }
                 results["searchresults"].append(result)
+                count += 1 # increment count for each result
             return results
         else:
             # There were no search results for this query
