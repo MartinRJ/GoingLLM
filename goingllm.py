@@ -159,7 +159,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 ]
             )
             responsemessage = response['choices'][0]['message']['content']
-            print("Does ChatGPT require a Google-Search: " + responsemessage)
+            print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
             dogooglesearch = yes_or_no(responsemessage)
     else:
         dogooglesearch = True
