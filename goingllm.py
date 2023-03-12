@@ -282,7 +282,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                             # Find the corresponding key in the gpturls dictionary
                                             key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
                                             # Get the weighting value for the key
-                                            weighting_value = float(weighting["weighting"][key])
+                                            weighting_value = float(weighting[key])
 
                                     max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
 
