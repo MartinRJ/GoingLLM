@@ -10,8 +10,9 @@ from num2words import num2words
 import openai
 import os
 import pandas as pd
+from pdfminer.high_level import extract_text_to_fp
+from pdfminer.layout import LAParams
 from pptx import Presentation
-from PyPDF2 import PdfReader
 import re
 import requests
 import threading
@@ -605,8 +606,8 @@ def extract_content(url):
     # Try to send a request to the URL and catch possible exceptions
     mimetype, encoding = mimetypes.guess_type(url)
     try:
-        response = requests.head(url, timeout=(3, 8))
-        response.raise_for_status()
+        with requests.head(url, timeout=(3, 8)) as response:
+            response.raise_for_status()
     except requests.exceptions.Timeout:
         print("Request timed out", flush=True)
         return False
@@ -627,30 +628,25 @@ def extract_content(url):
                 # Check the content type of the response and handle it accordingly
                 if "application/pdf" in mimetype:
                     # Process PDF content
-                    filecontent = load_url_content(url)
-                    if filecontent: 
-                        pdf = PdfReader(BytesIO(filecontent))
-                        text = ""
-                        for page in pdf.pages:
-                            text += page.extract_text()
-                            if len(text) > MAX_FILE_CONTENT:
-                                break
-                        text = replace_newlines(text)
-                        return text[:MAX_FILE_CONTENT]
-                    else:
-                        return False
+                    with requests.get(url, stream=True) as response:
+                        response.raise_for_status()
+                        with BytesIO() as filecontent:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                filecontent.write(chunk)
+                            filecontent.seek(0)
+                            with BytesIO() as outfp:
+                                extract_text_to_fp(filecontent, outfp, laparams=LAParams())
+                                text = outfp.getvalue().decode('utf-8')
+                                text = replace_newlines(text)
+                                return text[:MAX_FILE_CONTENT]
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
                     if bool(filecontent): 
                         # Process HTML content
                         # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
-                        # Find the body element in the HTML document
-                        body = soup.body
-                        # Extract the text from the body element
-                        html = body.get_text()
-                        html = replace_newlines(html)
-                        return html[:MAX_FILE_CONTENT]
+                        html = process_html_content(soup)
+                        return html
                     else:
                         return False
                 elif "text/plain" in mimetype:
@@ -665,36 +661,24 @@ def extract_content(url):
                     # Process Excel content
                     filecontent = load_url_content(url)
                     if filecontent:
-                        df = pd.read_csv(BytesIO(filecontent))
-                        text = df.to_string()
-                        text = replace_newlines(text)
-                        return text[:MAX_FILE_CONTENT]
+                        text = process_excel_content(filecontent)
+                        return text
                     else:
                         return False
                 elif "text/csv" in mimetype:
                     # Process CSV content
                     filecontent = load_url_content(url)
                     if filecontent:
-                        df = pd.read_csv(BytesIO(filecontent))
-                        text = df.to_string()
-                        text = replace_newlines(text)
-                        return text[:MAX_FILE_CONTENT]
+                        text = process_csv_content(filecontent)
+                        return text
                     else:
                         return False
                 elif any(substring in mimetype for substring in ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.ms-powerpoint.presentation.macroEnabled.12"]):
                     # Process PowerPoint content
                     filecontent = load_url_content(url)
                     if filecontent:
-                        pr = Presentation(BytesIO(filecontent))
-                        text = ""
-                        for slide in pr.slides:
-                            for shape in slide.shapes:
-                                if hasattr(shape, "text"):
-                                    text += shape.text + "\n"
-                                    if len(text) > MAX_FILE_CONTENT:
-                                        break
-                        text = replace_newlines(text)
-                        return text[:MAX_FILE_CONTENT]
+                        text = process_ppt_content(filecontent)
+                        return text
                     else:
                         return False
                 else:
@@ -709,6 +693,53 @@ def extract_content(url):
             # There was another error
             print(f"Error retrieving URL: {e}", flush=True)
             return False
+
+def process_excel_content(filecontent):
+    try:
+        with io.BytesIO(filecontent) as f:
+            df = pd.read_excel(f)
+            text = df.to_string()
+            text = replace_newlines(text)
+            return text[:MAX_FILE_CONTENT]
+    except Exception as e:
+        print(f"Error processing Excel content: {e}", flush=True)
+        return False
+
+def process_csv_content(filecontent):
+    try:
+        with io.BytesIO(filecontent) as f:
+            df = pd.read_csv(f)
+            text = df.to_string()
+            text = replace_newlines(text)
+            return text[:MAX_FILE_CONTENT]
+    except Exception as e:
+        print(f"Error processing CSV content: {e}", flush=True)
+        return False
+
+def process_ppt_content(filecontent):
+    try:
+        with io.BytesIO(filecontent) as f:
+            pr = Presentation(f)
+            text = ""
+            for slide in pr.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text += shape.text + "\n"
+                        if len(text) > MAX_FILE_CONTENT:
+                            break
+            text = replace_newlines(text)
+            return text[:MAX_FILE_CONTENT]
+    except Exception as e:
+        print(f"Error processing PowerPoint content: {e}", flush=True)
+        return False
+
+def process_html_content(soup):
+    # Find the body element in the HTML document
+    body = soup.body
+    # Extract the text from the body element
+    html = body.get_text()
+    html = replace_newlines(html)
+    return html[:MAX_FILE_CONTENT]
 
 if __name__ == "__main__":
     app.run()
