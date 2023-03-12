@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import chardet
 from datetime import datetime
 from flask import Flask, request, make_response, send_from_directory
 from googleapiclient.discovery import build
@@ -678,6 +679,7 @@ def extract_content(url):
 
 def process_excel_content(filecontent):
     try:
+        # Detect the encoding of the file content using chardet
         with BytesIO(filecontent) as f:
             df = pd.read_excel(f)
             text = df.to_string()
@@ -689,8 +691,11 @@ def process_excel_content(filecontent):
 
 def process_csv_content(filecontent):
     try:
+        # Detect the encoding of the file content using chardet
+        detected_encoding = chardet.detect(filecontent)['encoding']
+
         with BytesIO(filecontent) as f:
-            df = pd.read_csv(f)
+            df = pd.read_csv(f, encoding=detected_encoding)
             text = df.to_string()
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
