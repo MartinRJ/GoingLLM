@@ -424,7 +424,7 @@ def extract_json(stringwithjson):
     if "keywords" in data:
         keywords = data["keywords"]
     else:
-        print("Error: JSON object doesn't contain 'keywords' array", flush=True)
+        print("Error: JSON object doesn't contain 'keywords' array: " + stringwithjson, flush=True)
         return False
 
     #return the result
