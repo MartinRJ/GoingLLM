@@ -640,6 +640,7 @@ def extract_content(url):
                                 extract_text_to_fp(filecontent, outfp, laparams=LAParams())
                                 text = outfp.getvalue().decode('utf-8')
                                 text = replace_newlines(text)
+                                print("downloaded pdf file: " + text[:300], flush=True) #debug
                                 return text[:MAX_FILE_CONTENT]
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
@@ -648,6 +649,7 @@ def extract_content(url):
                         # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
                         html = process_html_content(soup)
+                        print("downloaded html file: " + html[:300], flush=True) #debug
                         return html
                     else:
                         return False
@@ -656,6 +658,7 @@ def extract_content(url):
                     if bool(filecontent):
                         # Process plain text content
                         filecontent = replace_newlines(filecontent)
+                        print("downloaded plaintext file: " + filecontent[:300], flush=True) #debug
                         return filecontent[:MAX_FILE_CONTENT]
                     else:
                         return False
@@ -664,6 +667,7 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_excel_content(filecontent)
+                        print("downloaded excel file: " + text[:300], flush=True) #debug
                         return text
                     else:
                         return False
@@ -672,6 +676,7 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_csv_content(filecontent)
+                        print("downloaded csv file: " + text[:300], flush=True) #debug
                         return text
                     else:
                         return False
@@ -680,6 +685,7 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_ppt_content(filecontent)
+                        print("downloaded powerpoint file: " + text[:300], flush=True) #debug
                         return text
                     else:
                         return False
