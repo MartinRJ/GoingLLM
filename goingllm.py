@@ -282,14 +282,16 @@ def response_task(usertask, task_id, dogoogleoverride):
                                             # Find the corresponding key in the gpturls dictionary
                                             key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
                                             # Get the weighting value for the key
-                                            weighting_value = weighting["weighting"][key]
+                                            weighting_value = float(weighting["weighting"][key])
 
                                     max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
 
                                     #Check if there's a weighting value for this URL
-                                    if weighting_value:
-                                        max_tokens_completion_summarize = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)+1 #+1 because 0 is not a valid value for max_tokens
+                                    if weighting_value and weighting_value > 0 and len(gpturls) > 0:
+                                        max_tokens_completion_summarize = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
                                         print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
+                                        if max_tokens_completion_summarize < 1:
+                                            max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
                                     result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
                                     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
