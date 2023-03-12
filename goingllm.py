@@ -243,6 +243,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                             sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
                             gpturls = {}
                             for index, _ in sorted_weighting:
+                                if index > NUMBER_GOOGLE_RESULTS-1:
+                                    break
                                 gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
                             results = gpturls
                         else:
