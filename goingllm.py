@@ -184,7 +184,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             keywords = [False]
 
             #Attempt to extract the JSON object from the response
-            jsonobject = extract_json(response['choices'][0]['message']['content'])
+            jsonobject = extract_json(response['choices'][0]['message']['content'], "keywords")
 
             if jsonobject:
                 # the function returned a list
@@ -233,7 +233,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                 {"role": "user", "content": prompt}
                             ]
                         )
-                        weighting = extract_json(response['choices'][0]['message']['content'])
+                        weighting = extract_json(response['choices'][0]['message']['content'], "weighting")
 
                         if weighting:
                             # the function returned a list, re-sort
@@ -387,7 +387,7 @@ def debug_output(note, string, system_prompt, mode):
     except Exception as e:
         print("Could not write file", flush=True)
 
-def extract_json(stringwithjson):
+def extract_json(stringwithjson, objectname):
     # Find the start and end indices of the outermost JSON object
     start = -1
     end = -1
@@ -419,16 +419,16 @@ def extract_json(stringwithjson):
         print("Error: Malformed JSON object: " + stringwithjson, flush=True)
         return False
 
-    keywords = []
-    #access the "keywords" array
-    if "keywords" in data:
-        keywords = data["keywords"]
+    items = []
+    #access the array
+    if objectname in data:
+        items = data[objectname]
     else:
-        print("Error: JSON object doesn't contain 'keywords' array: " + stringwithjson, flush=True)
+        print("Error: JSON object doesn't contain '" + objectname + "' array: " + stringwithjson, flush=True)
         return False
 
     #return the result
-    return keywords
+    return items
 
 def calculate_available_tokens(token_reserved_for_response):
     #Calculates the available tokens for a request, taking into account the Tokens reserved for the response
