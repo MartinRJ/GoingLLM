@@ -130,7 +130,6 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     ALLURLS = []
 
-    usertask = json.dumps(usertask)
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
     if not dogoogleoverride:
@@ -219,7 +218,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                         print("Error, need at least 1 token for a query.", flush=True)
                         has_result = False
                     else:
-                        prompt = "Bitte wählen Sie die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für Sie zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten und geben Sie sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt, in Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, können Sie aus dem resultierenden JSON-Objekt entfernen: \n\n" + json.dumps(search_google_result) + " Beispiel-Antwort: {\"weighting\": {3:0.6,0:0.2,1:0.1,2:0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
+                        prompt = "Bitte wählen Sie die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für Sie zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten und geben Sie sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt, in Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, können Sie aus dem resultierenden JSON-Objekt entfernen: \n\n" + search_google_result + " Beispiel-Antwort: {\"weighting\": {3:0.6,0:0.2,1:0.1,2:0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
                         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte mit JSON-Objekten"
                         #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                         prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
@@ -280,7 +279,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
-                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + json.dumps(responsemessage)
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + responsemessage
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
@@ -295,7 +294,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                         ]
                                     )
                                     result_summary = response['choices'][0]['message']['content']
-                                    debug_output("Page content - result", result_summary, system_prompt, 'a')
+                                    #debug_output("Page content - result", result_summary, system_prompt, 'a')
                                     searchresults.append(result_summary)
                                     has_result = True
                             else:
@@ -311,7 +310,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             for text in searchresults:
                 if len(text) > 0:
                     has_text = True
-                    finalquery += json.dumps(text)
+                    finalquery += text
 
             if has_text:
                 print("Final result found, making final query.", flush=True)
