@@ -218,7 +218,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                         has_result = False
                     else:
                         prompt = "Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n" + json.dumps(search_google_result) + "\n\nBeispiel-Antwort: {\"weighting\": {3:0.6,0:0.2,1:0.1,2:0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
-                        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte mit JSON-Objekten"
+                        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {2:0.6,0:0.3,1:0.1}}"
                         #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                         prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
                         #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
