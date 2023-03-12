@@ -400,7 +400,7 @@ def extract_json(stringwithjson):
     try:
         data = json.loads(json_string)
     except ValueError as e:
-        print("Error: Malformed JSON object", flush=True)
+        print("Error: Malformed JSON object: " + stringwithjson, flush=True)
         return False
 
     keywords = []
