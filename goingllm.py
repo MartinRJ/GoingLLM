@@ -210,7 +210,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 ergebnis = True
             else:
                 ergebnis = False
-                print("Not all entries in the keyword-array are strings. Cannot use the results.", flush=True)
+                print("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords), flush=True)
             searchresults = []
             zaehler = 0
             if not ergebnis == False:
