@@ -8,6 +8,7 @@ import markdown
 import mimetypes
 from num2words import num2words
 import openai
+import openpyxl
 import os
 import pandas as pd
 from pdfminer.high_level import extract_text_to_fp
