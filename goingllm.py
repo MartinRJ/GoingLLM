@@ -11,6 +11,7 @@ import os
 import pandas as pd
 from pptx import Presentation
 from PyPDF2 import PdfReader
+import re
 import requests
 import threading
 import tiktoken
@@ -387,9 +388,22 @@ def debug_output(note, string, system_prompt, mode):
         print("Could not write file", flush=True)
 
 def extract_json(stringwithjson):
+    # Find the start and end indices of the outermost JSON object
+    start = -1
+    end = -1
+    brace_count = 0
+    for i, char in enumerate(stringwithjson):
+        if char == '{':
+            if start == -1:
+                start = i
+            brace_count += 1
+        elif char == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end = i + 1
+                break
+
     #find the JSON object
-    start = stringwithjson.find('{')
-    end = stringwithjson.find('}') + 1
     if start == -1 or end == 0:
         print("Error: JSON object not found", flush=True)
         return False
@@ -398,6 +412,8 @@ def extract_json(stringwithjson):
 
     #parse the JSON object
     try:
+        # Convert integer keys to strings
+        json_string = re.sub(r'\"(\d+)\":', lambda match: '"' + str(match.group(1)) + '":', json_string)
         data = json.loads(json_string)
     except ValueError as e:
         print("Error: Malformed JSON object: " + stringwithjson, flush=True)
