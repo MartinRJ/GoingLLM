@@ -178,7 +178,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             keywords = [False]
 
             #Attempt to extract the JSON object from the response
-            jsonobject = extract_json(responsemessage)
+            jsonobject = extract_json(responsemessage, "keywords")
 
             if jsonobject:
                 # the function returned a list
@@ -222,7 +222,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                         prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
                         #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
                         responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH)
-                        weighting = extract_json(responsemessage)
+                        weighting = extract_json(responsemessage, "weighting")
 
                         print("weighting content: " + json.dumps(weighting), flush=True)
                         print("search_google_result content: " + json.dumps(search_google_result), flush=True)
