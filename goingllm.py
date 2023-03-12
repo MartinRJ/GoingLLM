@@ -331,7 +331,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("No search results.", flush=True)
     else:
         has_result = False
-        print("GPT thinks, no search is required: " + responsemessage, flush=True)
+        print("GPT thinks, no search is required. Response to 'Is search required?' was: " + responsemessage, flush=True)
 
     if not has_result:
         print("Nothing found, making a regular query.", flush=True)
