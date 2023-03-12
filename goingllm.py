@@ -218,6 +218,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                     search_google_result = search_google(keyword)
                     #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
                     google_result = None
+                    if search_google_result is None: #Skip if nothing was found or there was an error in search
+                        continue
                     for search_result in search_google_result['searchresults']:
                         for key in search_result:
                             if not google_result is None:
