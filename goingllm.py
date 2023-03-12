@@ -206,6 +206,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             if not ergebnis == False:
                 for keyword in keywords:
                     search_google_result = search_google(keyword)
+                    print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True)
                     google_result = None
                     for search_result in search_google_result['searchresults']:
                         for key in search_result:
@@ -505,17 +506,17 @@ def search_google(query):
         response = cse.list(q=query, cx=CX).execute()
 
         # Check if there are search results
-        if 'items' in response:
+        if "items" in response:
             # Extract the first three URLs from Google search results or less if there are not enough
             results = {"searchresults":[]}
             count = 0
-            for item in response['items'][:min(NUMBER_GOOGLE_RESULTS, len(response['items']))]:
+            for item in response["items"][:min(NUMBER_GOOGLE_RESULTS, len(response["items"]))]:
                 result = {
-                    count: {"title":item['title'],
-                    'url': item['link'],
-                    'description': item['snippet']}
+                    count: {"title":item["title"],
+                    "url": item["link"],
+                    "description": item["snippet"]}
                 }
-                results['searchresults'].append(result)
+                results["searchresults"].append(result)
             return results
         else:
             # There were no search results for this query
