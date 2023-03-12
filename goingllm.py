@@ -372,6 +372,18 @@ def response_task(usertask, task_id, dogoogleoverride):
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
 
+def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens):
+    response = openai.ChatCompletion.create(
+    model=MODEL,
+    temperature=completiontemperature,
+    max_tokens=completionmaxtokens,
+    messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return response['choices'][0]['message']['content']
+
 def debug_output(note, string, system_prompt, mode):
     messages = [
     {"role": "system", "content": system_prompt},
@@ -533,48 +545,45 @@ def search_google(query):
 
 def load_url_text(url):
     try:
-        response = requests.get(url, timeout=(3, 8))
-        response.raise_for_status()
+        with requests.get(url, timeout=(3, 8)) as response:
+            response.raise_for_status()
+            # process response
+            status_code = response.status_code
+            if status_code == 200:
+                text = response.text
+                if len(text) > 0:
+                    return text
+                else:
+                    return False
+            else:
+                return False
     except requests.exceptions.Timeout:
         print("Request timed out", flush=True)
         return False
     except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}", Flush=True)
+        print(f"Request error: {e}", flush=True)
         return False
-    else:
-        # process response
-        response = requests.get(url)
-        status_code = response.status_code
-        if status_code == 200:
-            text = response.text
-            if len(text) > 0:
-                return text
-            else:
-                return False
-        else:
-            return False
 
 def load_url_content(url):
     try:
-        response = requests.get(url, timeout=(3, 8))
-        response.raise_for_status()
+        with requests.get(url, timeout=(3, 8)) as response:
+            response.raise_for_status()
+            # process response
+            status_code = response.status_code
+            if status_code == 200:
+                content = response.content
+                if len(content) > 0:
+                    return content
+                else:
+                    return False
+            else:
+                return False
     except requests.exceptions.Timeout:
         print("Request timed out", flush=True)
         return False
     except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}", Flush=True)
+        print(f"Request error: {e}", flush=True)
         return False
-    else:
-        # process response
-        status_code = response.status_code
-        if status_code == 200:
-            content = response.content
-            if len(content) > 0:
-                return content
-            else:
-                return False
-        else:
-            return False
 
 def replace_newlines(text):
     # loop until there are no more occurrences of four newlines
