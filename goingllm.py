@@ -236,8 +236,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                         )
                         weighting = extract_json(response['choices'][0]['message']['content'], "weighting")
 
-                        print("weighting content: " + json.dumps(weighting, flush=True))
-                        print("search_google_result content: " + json.dumps(search_google_result, flush=True))
+                        print("weighting content: " + json.dumps(weighting), flush=True)
+                        print("search_google_result content: " + json.dumps(search_google_result), flush=True)
                         if weighting:
                             # the function returned a list, re-sort
                             sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
