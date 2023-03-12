@@ -506,7 +506,7 @@ def search_google(query):
 
 def load_url_text(url):
     try:
-        with requests.get(url, timeout=(3, 8)) as response:
+        with requests.get(url, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
             # process response
             status_code = response.status_code
@@ -527,7 +527,7 @@ def load_url_text(url):
 
 def load_url_content(url):
     try:
-        with requests.get(url, timeout=(3, 8)) as response:
+        with requests.get(url, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
             # process response
             status_code = response.status_code
@@ -557,7 +557,7 @@ def extract_content(url):
     # Try to send a request to the URL and catch possible exceptions
     mimetype, encoding = mimetypes.guess_type(url)
     try:
-        with requests.head(url, timeout=(3, 8)) as response:
+        with requests.head(url, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
     except requests.exceptions.Timeout:
         print("Request timed out", flush=True)
@@ -579,7 +579,7 @@ def extract_content(url):
                 # Check the content type of the response and handle it accordingly
                 if "application/pdf" in mimetype:
                     # Process PDF content
-                    with requests.get(url, stream=True) as response:
+                    with requests.get(url, stream=True, allow_redirects=True) as response:
                         response.raise_for_status()
                         with BytesIO() as filecontent:
                             for chunk in response.iter_content(chunk_size=8192):
