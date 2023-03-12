@@ -212,12 +212,12 @@ def response_task(usertask, task_id, dogoogleoverride):
                             else:
                                 google_result = [search_result[key]['url']]
                     # Let ChatGPT pick the most promising
-
+                    gpturls = False
                     if calculate_available_tokens(MAX_TOKENS_SELECT_SEARCHES_LENGTH) < 1:
                         print("Error, need at least 1 token for a query.", flush=True)
                         has_result = False
                     else:
-                        prompt = "Bitte wählen Sie die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für Sie zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten und geben Sie sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt, in Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, können Sie aus dem resultierenden JSON-Objekt entfernen: \n\n" + json.dumps(search_google_result) + " Beispiel-Antwort: {\"weighting\": {3:0.6,0:0.2,1:0.1,2:0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
+                        prompt = "Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n" + json.dumps(search_google_result) + "\n\nBeispiel-Antwort: {\"weighting\": {3:0.6,0:0.2,1:0.1,2:0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
                         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte mit JSON-Objekten"
                         #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                         prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
@@ -235,11 +235,9 @@ def response_task(usertask, task_id, dogoogleoverride):
                                 if int(index) > len(search_google_result['searchresults'])-1:
                                     break
                                 gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
-                            results = gpturls
                         else:
                             # the function returned False, resume unaltered
                             print("No results of initial sort.", flush=True)
-
 
                     # Check for links in the original task
                     extractor = URLExtract()
@@ -274,11 +272,26 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
-                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammefassung erwähnst:\n\n" + responsemessage
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammenfassung erwähnst:\n\nVon URL: " +  URL + "\nInhalt:\n" + responsemessage
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
-                                    result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, MAX_TOKENS_SUMMARIZE_RESULT)
+                                    weighting_value = False
+                                    if gpturls:
+                                        if URL in gpturls.values():
+                                            # Find the corresponding key in the gpturls dictionary
+                                            key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
+                                            # Get the weighting value for the key
+                                            weighting_value = weighting["weighting"][key]
+
+                                    max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
+
+                                    #Check if there's a weighting value for this URL
+                                    if weighting_value:
+                                        max_tokens_completion_summarize = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)+1 #+1 because 0 is not a valid value for max_tokens
+                                        print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
+
+                                    result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
                                     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
                                     #debug_output("Page content - result", result_summary, system_prompt, 'a')
                                     searchresults.append(result_summary)
