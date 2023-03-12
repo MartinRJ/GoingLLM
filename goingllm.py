@@ -197,7 +197,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords), flush=True)
             searchresults = []
             zaehler = 0
-            if not ergebnis == False:
+            if ergebnis:
                 for keyword in keywords:
                     search_google_result = search_google(keyword)
                     #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
@@ -266,7 +266,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                             ALLURLS.append(URL)
                             print("Here are the URLs: " + URL, flush=True)
                             dlfile = extract_content(URL)
-                            if not dlfile == False:
+                            if dlfile:
                                 responsemessage = dlfile
 
                                 if calculate_available_tokens(MAX_TOKENS_SUMMARIZE_RESULT) < 1:
@@ -593,7 +593,7 @@ def extract_content(url):
                                 return text[:MAX_FILE_CONTENT]
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
-                    if bool(filecontent): 
+                    if filecontent: 
                         # Process HTML content
                         # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
@@ -604,7 +604,7 @@ def extract_content(url):
                         return False
                 elif "text/plain" in mimetype:
                     filecontent = load_url_text(url)
-                    if bool(filecontent):
+                    if filecontent:
                         # Process plain text content
                         filecontent = replace_newlines(filecontent)
                         print("downloaded plaintext file: " + filecontent[:300], flush=True) #debug
@@ -616,8 +616,11 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_excel_content(filecontent)
-                        print("downloaded excel file: " + text[:300], flush=True) #debug
-                        return text
+                        if text:
+                            print("downloaded excel file: " + text[:300], flush=True) #debug
+                            return text
+                        else:
+                            return False
                     else:
                         return False
                 elif "text/csv" in mimetype:
@@ -625,8 +628,11 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_csv_content(filecontent)
-                        print("downloaded csv file: " + text[:300], flush=True) #debug
-                        return text
+                        if text:
+                            print("downloaded csv file: " + text[:300], flush=True) #debug
+                            return text
+                        else:
+                            return False
                     else:
                         return False
                 elif any(substring in mimetype for substring in ["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/vnd.ms-powerpoint.presentation.macroEnabled.12"]):
@@ -634,8 +640,11 @@ def extract_content(url):
                     filecontent = load_url_content(url)
                     if filecontent:
                         text = process_ppt_content(filecontent)
-                        print("downloaded powerpoint file: " + text[:300], flush=True) #debug
-                        return text
+                        if text:
+                            print("downloaded powerpoint file: " + text[:300], flush=True) #debug
+                            return text
+                        else:
+                            return False
                     else:
                         return False
                 else:
@@ -653,7 +662,7 @@ def extract_content(url):
 
 def process_excel_content(filecontent):
     try:
-        with io.BytesIO(filecontent) as f:
+        with BytesIO(filecontent) as f:
             df = pd.read_excel(f)
             text = df.to_string()
             text = replace_newlines(text)
@@ -664,7 +673,7 @@ def process_excel_content(filecontent):
 
 def process_csv_content(filecontent):
     try:
-        with io.BytesIO(filecontent) as f:
+        with BytesIO(filecontent) as f:
             df = pd.read_csv(f)
             text = df.to_string()
             text = replace_newlines(text)
@@ -675,7 +684,7 @@ def process_csv_content(filecontent):
 
 def process_ppt_content(filecontent):
     try:
-        with io.BytesIO(filecontent) as f:
+        with BytesIO(filecontent) as f:
             pr = Presentation(f)
             text = ""
             for slide in pr.slides:
