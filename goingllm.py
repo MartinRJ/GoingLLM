@@ -342,7 +342,7 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
             {"role": "user", "content": prompt}
         ]
     )
-    print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens'] + "\n\nPrompt:\n" + prompt), flush=True)
+    print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt, flush=True)
     return response['choices'][0]['message']['content']
 
 def debug_output(note, string, system_prompt, mode):
