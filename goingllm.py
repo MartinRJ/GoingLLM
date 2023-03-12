@@ -139,7 +139,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage zu erfüllen? Bitte antworte mit 'Ja.' oder 'Nein.'."
-            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit 'Ja.' oder 'Nein.'. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde."
+            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit 'Ja.' oder 'Nein.'. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Bitte antworte mit \"Ja.\" für den Fall, dass du keinen Zugriff auf erfragte Informationen hast."
             prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
             response = openai.ChatCompletion.create(
             model=MODEL,
