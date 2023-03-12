@@ -241,7 +241,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                             sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
                             gpturls = {}
                             for index, _ in sorted_weighting:
-                                gpturls[index] = search_google_result['searchresults'][int(index)]['url']
+                                gpturls[index] = search_google_result['searchresults'][str(index)]['url']
                             results = gpturls
                         else:
                             # the function returned False, resume unaltered
@@ -512,7 +512,7 @@ def search_google(query):
             count = 0
             for item in response["items"][:min(NUMBER_GOOGLE_RESULTS, len(response["items"]))]:
                 result = {
-                    count: {"title":item["title"],
+                    str(count): {"title": item["title"],
                     "url": item["link"],
                     "description": item["snippet"]}
                 }
