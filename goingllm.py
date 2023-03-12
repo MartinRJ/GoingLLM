@@ -140,7 +140,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             final_result = "Error - need at least 1 token for a query."
         else:
             # Get current UTC time
-            now = datetime.datetime.utcnow()
+            now = datetime.utcnow()
             # Round to the nearest minute
             now = now.replace(second=0, microsecond=0)
             # Format as a string
