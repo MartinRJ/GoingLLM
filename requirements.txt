@@ -13,3 +13,4 @@ tiktoken==0.3.0
 urlextract==1.8.0
 pdfminer.six==20201018
 openpyxl==3.1.1
+chardet==5.1.0
