@@ -53,7 +53,7 @@ cx
 [Your Google Custom Search API 'CX' key.]
 
 BODY_MAX_LENGTH  
-20000  
+15000  
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH  
@@ -127,7 +127,6 @@ Usability, Frontend, New Features:
 • Adjust the height for tablets.  
 • Implement ChatML if necessary.  
 • Avoid encoded unicode characters in the final output.  
-• Adjust the height for tablets.  
 • Sources!
 
 Backend and enhancing the Backend for a More Intelligent Tool:  
