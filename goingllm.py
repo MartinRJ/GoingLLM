@@ -301,7 +301,11 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     formatted_text_summary = text_summary.format(URL)
 
                                     #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-                                    sum_results = calculate_tokens(PROMPT_FINAL_QUERY+searchresults+formatted_text_summary, SYSTEM_PROMPT_FINAL_QUERY)
+                                    test_finalquery = PROMPT_FINAL_QUERY
+                                    for text in searchresults:
+                                        if len(text) > 0:
+                                            test_finalquery += text
+                                    sum_results = calculate_tokens(test_finalquery+formatted_text_summary, SYSTEM_PROMPT_FINAL_QUERY)
                                     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
                                         print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results + ", requested were " + str(max_tokens_completion_summarize)), flush=True)
                                         max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
