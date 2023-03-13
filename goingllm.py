@@ -309,16 +309,16 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
                                         print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results + ", requested were " + str(max_tokens_completion_summarize)), flush=True)
                                         max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
-                                        if max_tokens_completion_summarize < 1:
-                                            print("Error - no tokens left for summary of URL content: " + URL, flush=True)
-                                        else:
-                                            prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+                                    if max_tokens_completion_summarize < 1:
+                                        print("Error - no tokens left for summary of URL content: " + URL, flush=True)
+                                    else:
+                                        prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
-                                            result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
-                                            #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                                            #debug_output("Page content - result", result_summary, system_prompt, 'a')
-                                            searchresults.append(formatted_text_summary + result_summary)
-                                            has_result = True
+                                        result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
+                                        #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+                                        #debug_output("Page content - result", result_summary, system_prompt, 'a')
+                                        searchresults.append(formatted_text_summary + result_summary)
+                                        has_result = True
                             else:
                                 responsemessage = "Error"
                                 print("Error summarizing URL content: " + URL, flush=True)
