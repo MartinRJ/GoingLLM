@@ -53,7 +53,7 @@ BODY_MAX_LENGTH
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH
-600
+2450
 [The token length for the final result for ChatGPT. Note that in total (prompt+answer) you may not exceed 4096 tokens or the request will fail, and the request will easily already consume over 1200 tokens, often more.]
 
 MAX_FILE_CONTENT
@@ -65,7 +65,7 @@ max_tokens_create_searchterms
 [The ChatGPT token length for the creation of the search keywords.]
 
 max_tokens_decision_to_google
-16
+3
 [The ChatGPT token length for the decision whether or not a Google search should be performed.]
 
 model
@@ -84,7 +84,7 @@ SECRETKEY
 [Your secret OpenAI key.]
 
 SUMMARIZE_MAX_TOKEN_LENGTH
-500
+170
 [The ChatGPT token length for summarizing the individual Google search results.]
 
 SELECT_SEARCHES_MAX_TOKEN_LENGTH
