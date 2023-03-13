@@ -320,7 +320,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     print("Error, need at least 1 token for a query.", flush=True)
                     has_result = False
                 else:
-                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche. Ich bekomme als Input eine interne Zusammenfassung einer aktuellen Google-Recherche. Der User kennt und sieht die Recherche-Informationen NICHT, die Recherche passiert intern. Ich kann die Informationen aus der Google-Recherche nutzen um meine Antwort auf eine bestimmte Anfrage (in spitzen Klammern: >>Beispielanfrage<<) potentiell zu verbessern. Ich antworte der Anfrage entsprechend potentiell ausführlich."
+                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche. Ich bekomme als Input eine Zusammenfassung einer aktuellen internen Google-Recherche. Du als Nutzer kennst und sieht diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Ich kann die Informationen aus der Google-Recherche nutzen um meine Antwort auf deine Anfrage potentiell zu verbessern. Ich antworte deiner Anfrage entsprechend potentiell ausführlich."
                     #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
                     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, system_prompt)
                     final_result = chatcompletion(system_prompt, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
