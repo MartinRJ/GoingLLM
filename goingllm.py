@@ -273,7 +273,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     print("Error, need at least 1 token for a query.", flush=True)
                                     has_result = False
                                 else:
-                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Google-Suchergebnissen zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind, in der Zusammenfassung erwähnst:\n\nVon URL: " +  URL + "\nInhalt:\n" + responsemessage
+                                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch die URL oder Webseite wenn sie relevant ist.\n\nVon URL: " +  URL + "\nInhalt:\n" + responsemessage
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                                     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
@@ -432,6 +432,32 @@ def calculate_available_tokens(token_reserved_for_response):
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
 
+
+def calculate_tokens(string, system_prompt):
+    # Calculate tokens. Set system_prompt to False to only count a single string, otherwise the entire message will be counted.
+    try:
+        enc = tiktoken.encoding_for_model(MODEL)
+    except KeyError:
+        enc = tiktoken.get_encoding("cl100k_base")
+        print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
+
+    if system_prompt:
+        messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": string}
+        ]
+        num_tokens = 0
+        for message in messages:
+            num_tokens += 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
+            for key, value in message.items():
+                num_tokens += len(enc.encode(value))
+                if key == "name":  # if there's a name, the role is omitted
+                    num_tokens += -1  # role is always required and always 1 token
+        num_tokens += 2  # every reply is primed with <im_start>assistant
+        return num_tokens
+    else:
+        return len(enc.encode(string))
+
 def truncate_string_to_tokens(string, max_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
     # max_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
@@ -460,7 +486,6 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
     num_tokens += 2  # every reply is primed with <im_start>assistant
     base_tokens += 4
 
-    tokens_system = enc.encode(system_prompt)
     possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens
     if (num_tokens > possible_tokens):
         print("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens), flush=True)
