@@ -132,6 +132,8 @@ def writefile(progress, json_data, task_id):
 def response_task(usertask, task_id, dogoogleoverride):
     if "<<" in usertask or ">>" in usertask:
         usertask = usertask.replace("<<", "»").replace(">>", "«")
+    PROMPT_FINAL_QUERY = "Zu der folgenden Anfrage: >>" + usertask + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent für die Internetrecherche. Ich bekomme als Input eine Zusammenfassung einer aktuellen internen Google-Recherche. Du als Nutzer kennst und sieht diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Ich kann die Informationen aus der Google-Recherche nutzen um meine Antwort auf deine Anfrage potentiell zu verbessern. Ich antworte deiner Anfrage entsprechend potentiell ausführlich."
 
     ALLURLS = []
 
@@ -276,7 +278,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                     prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch die URL oder Webseite wenn sie relevant ist.\n\nVon URL: " +  URL + "\nInhalt:\n" + responsemessage
                                     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
                                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
-                                    prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SUMMARIZE_RESULT, system_prompt)
+
                                     weighting_value = False
                                     if gpturls:
                                         if URL in gpturls.values():
@@ -294,11 +296,25 @@ def response_task(usertask, task_id, dogoogleoverride):
                                         if max_tokens_completion_summarize < 1:
                                             max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
-                                    result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
-                                    #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                                    #debug_output("Page content - result", result_summary, system_prompt, 'a')
-                                    searchresults.append(result_summary)
-                                    has_result = True
+                                    #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
+                                    text_summary = "\nZusammenfassung der Ergebnisse von \"{}\": "
+                                    formatted_text_summary = text_summary.format(URL)
+
+                                    #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
+                                    sum_results = calculate_tokens(PROMPT_FINAL_QUERY+searchresults+formatted_text_summary, SYSTEM_PROMPT_FINAL_QUERY)
+                                    if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
+                                        print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results + ", requested were " + str(max_tokens_completion_summarize)), flush=True)
+                                        max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
+                                        if max_tokens_completion_summarize < 1:
+                                            print("Error - no tokens left for summary of URL content: " + URL, flush=True)
+                                        else:
+                                            prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+
+                                            result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
+                                            #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+                                            #debug_output("Page content - result", result_summary, system_prompt, 'a')
+                                            searchresults.append(formatted_text_summary + result_summary)
+                                            has_result = True
                             else:
                                 responsemessage = "Error"
                                 print("Error summarizing URL content: " + URL, flush=True)
@@ -307,7 +323,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 has_result = False
                 print("No search terms.", flush=True)
 
-            finalquery = "Zu der folgenden Anfrage: >>" + usertask + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage zu lösen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+            finalquery = PROMPT_FINAL_QUERY
             has_text = False
             for text in searchresults:
                 if len(text) > 0:
@@ -320,10 +336,9 @@ def response_task(usertask, task_id, dogoogleoverride):
                     print("Error, need at least 1 token for a query.", flush=True)
                     has_result = False
                 else:
-                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche. Ich bekomme als Input eine Zusammenfassung einer aktuellen internen Google-Recherche. Du als Nutzer kennst und sieht diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Ich kann die Informationen aus der Google-Recherche nutzen um meine Antwort auf deine Anfrage potentiell zu verbessern. Ich antworte deiner Anfrage entsprechend potentiell ausführlich."
                     #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
-                    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, system_prompt)
-                    final_result = chatcompletion(system_prompt, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
+                    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
+                    final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
                     #final_result = escape_result(final_result)
                     #debug_output("final query", finalquery, system_prompt, 'a') #----Debug Output
                     has_result = True
