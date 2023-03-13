@@ -29,8 +29,11 @@ It is protected with Basic Auth and will be available at https://YOURAPPNAME.her
 All the other files can remain unchanged. All other settings and API keys are configured in the Heroku Config Vars.
 
 Note that the internal prompts to the ChatGPT API are written in German, but it shouldn't be hard to ask it to answer in English or any other language it understands, anyways.  
-There is lots of debug output in the logs - you don't have to install Heroku CLI, just go to https://dashboard.heroku.com/apps/YOURAPPNAME/logs to view them. You can also deploy, start and stop the app on the Heroku Dashboard website.  
-At the Heroku app's settings you will need to set all the following Config Vars, including the API keys and the ChatGPT API variables at https://dashboard.heroku.com/apps/YOURAPPNAME/settings with these exact names:
+There is lots of debug output in the logs - you don't have to install Heroku CLI, just go to https://dashboard.heroku.com/apps/YOURAPPNAME/logs to view them. You can also deploy, start and stop the app on the Heroku Dashboard website.
+
+### Config Vars
+
+At the Heroku app's settings you will need to set all the following **Config Vars**, including the API keys and the ChatGPT API variables at https://dashboard.heroku.com/apps/YOURAPPNAME/settings with these exact names:
 
 NUMBER_OF_KEYWORDS  
 5  
