@@ -1,13 +1,16 @@
 # GoingLLM
 I want to make Assistant (the ChatGPT model) be able to do Google searches if it's required to solve a task.
 
-Preconditions:  
+## Preconditions:
+
 • You need a Google Custom Search JSON API - API key (https://developers.google.com/custom-search/v1/overview?hl=en)  
 • You also need an OpenAI account with subsequent API key (https://platform.openai.com/account/api-keys)  
 • And you need a Heroku "Basic" Dynos account (https://dashboard.heroku.com/new-app) to create a new app  
-• You can then create a Github repository with all the files, and connect your Heroku app with it (https://dashboard.heroku.com/apps/YOURAPPNAME/deploy/github)  
+• You can then create a Github repository with all the files, and connect your Heroku app with it (https://dashboard.heroku.com/apps/YOURAPPNAME/deploy/github)
+
 -----
-How it works:  
+## How it works:
+
 It shows you an input and output window, a send button and a progress bar at https://YOURAPPNAME.herokuapp.com/ once you've set up the API keys and the Config Vars and successfully deployed it.
 The tool takes a regular chat command, and submits it to the official ChatGPT-API.  
 It will prompt the ChatGPT API to decide whether or not Google searches will be required to create a response. (If you add 'Perform an internet search' to your prompt, it will most likely do it every time.)  
@@ -15,8 +18,11 @@ Then if a Google search is required, the tool will generate further prompts to t
 Then it will use the Google Custom Search API to perform these searches, download the files temporarily in plaintext, and ask the ChatGPT API to extract the most important data from the results.  
 Finally, it will send the collected result data together with the original prompt or question back to the ChatGPT API and show you the resulting answer.  
 The tool will now prompt the ChatGPT API to weight the Google results by showing it the URL, title and summary, before it downloads it. So that the bot can decide which results it thinks will be most useful to serve the initial request.  
-You now have the option to check the "Always Google" checkbox/override, so the tool will skip the initial question to ChatGPT, whether it thinks that a google research will be useful to serve the initial request, and will do a Google search in any case.  
+You now have the option to check the "Always Google" checkbox/override, so the tool will skip the initial question to ChatGPT, whether it thinks that a google research will be useful to serve the initial request, and will do a Google search in any case.
+
 -----
+## Setup:
+
 The python script is meant to be deployed at Heroku. I used a "Basic Dynos" account.
 It is protected with Basic Auth and will be available at https://YOURAPPNAME.herokuapp.com/ when you deploy it at Heroku.  
 ➔ You MUST edit the Procfile and put in your own app's name in place of "goingllm" and rename the script "goingllm.py" accordingly: If your app is "Myapp", then replace goingllm with Myapp in Procfile, and also rename goingllm.py to Myapp.py.  
@@ -109,7 +115,8 @@ Note that the API requests are not free. Use this at your own risk. If you sign 
 If you are using this for a public API, you might consider adding aufgabe = bleach.clean(body) and import bleach, or something similar, to sanitize input, at the top of the python script.
 
 -----
-To Do:  
+## To Do:
+
 Usability, Frontend, New Features:  
 • Allow continuing conversations instead of single prompts only: summarize and process chat history.  
 • Provide feedback to users, such as current search terms, URLs, and status.  
@@ -133,5 +140,5 @@ Testing, Bugs and Error Handling:
 • Implement client-side error handling if the .json file does not exist.  
 • Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.
 
-  
+
 I have heavily used ChatGPT and Bing Chat to create this program in less than a day. What a time to be alive!
