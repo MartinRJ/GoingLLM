@@ -273,6 +273,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                         if not dlfile:
                             responsemessage = "Error"
                             print("Error summarizing URL content: " + URL, flush=True)
+                            continue
                         responsemessage = dlfile
 
                         if calculate_available_tokens(MAX_TOKENS_SUMMARIZE_RESULT) < 1:
