@@ -480,7 +480,7 @@ def calculate_tokens(string, system_prompt):
 def truncate_string_to_tokens(string, max_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
     # max_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
-    base_tokens = 10 #Base value, I noticed that the max of 4096 is off by 1 in the gpt-3.5 API
+    base_tokens = 11 #Base value, I noticed that the max of 4096 is off by 1 in the gpt-3.5 API
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
