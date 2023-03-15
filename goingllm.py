@@ -480,7 +480,7 @@ def calculate_tokens(string, system_prompt):
 def truncate_string_to_tokens(string, max_tokens, system_prompt):
     # Truncate string to specified number of tokens, if required.
     # max_tokens is what is reserved for the completion (max), string is the user message content, and system_prompt is the system message content.
-    base_tokens = 1 #Base value
+    base_tokens = 1 #Base value, I noticed that the max of 4096 is off by 1 in the gpt-3.5 API
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
@@ -492,20 +492,16 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
     {"role": "user", "content": string}
     ]
     num_tokens = 0
-    base_tokens += 4
     for message in messages:
         num_tokens += 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
-        base_tokens += 4
         for key, value in message.items():
             num_tokens += len(enc.encode(value))
-            base_tokens += 2
             if key == "name":  # if there's a name, the role is omitted
                 num_tokens += -1  # role is always required and always 1 token
-                base_tokens += -1
     num_tokens += 2  # every reply is primed with <im_start>assistant
-    base_tokens += 4
 
-    possible_tokens = MODEL_MAX_TOKEN - max_tokens - base_tokens
+    system_tokens = len(enc.encode(system_prompt))
+    possible_tokens = MODEL_MAX_TOKEN - max_tokens - system_tokens - base_tokens
     if (num_tokens > possible_tokens):
         print("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens), flush=True)
         tokens = enc.encode(string)

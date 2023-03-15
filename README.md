@@ -117,6 +117,8 @@ The most relevant numbers here are NUMBER_GOOGLE_RESULTS, MAX_FILE_CONTENT and N
 Note that the API requests are not free. Use this at your own risk. If you sign up for a basic, free Google Custom Search API key, you can do 100 free searches/day at the time of writing.  
 If you are using this for a public API, you might consider adding aufgabe = bleach.clean(body) and import bleach, or something similar, to sanitize input, at the top of the python script.
 
+The token-calculation could be off in future models of gpt-3.5-turbo (calculate_tokens, truncate_string_to_tokens), I did not include the suggested limitation to the exact version of the model "gpt-3.5-turbo-0301" as suggested in https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb, because obviously "gpt-3.5-turbo" (the latest version) would not work then.
+
 -----
 ## To Do:
 
