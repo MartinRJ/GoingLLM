@@ -355,6 +355,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 else:
                     #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
                     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
+                    finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
                     final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
                     #final_result = escape_result(final_result)
                     #debug_output("final query", finalquery, system_prompt, 'a') #----Debug Output
@@ -422,8 +423,11 @@ def truncate_at_last_period_or_newline(text):
         return text
     # Cut off the text at the point or '\n' that occurs later on
     truncate_index = max(last_period, last_newline)
-    # Add 1 to keep the dot or '\n' in the text
-    return text[:truncate_index + 1]
+    if truncate_index == last_period:
+        # Add 1 to keep the dot in the text
+        return text[:truncate_index + 1]
+    else:
+        return text[:truncate_index] #do not keep the '\n'
 
 def extract_json(stringwithjson, objectname):
     # Find the start and end indices of the outermost JSON object
