@@ -316,7 +316,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                                 test_finalquery += text
                         sum_results = calculate_tokens(test_finalquery+formatted_text_summary, SYSTEM_PROMPT_FINAL_QUERY)
                         if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-                            print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results + ", requested were " + str(max_tokens_completion_summarize)), flush=True)
+                            print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
                             max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
                             if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
                                 print("Not enough tokens after decreasing, for: " + URL, flush=True)
