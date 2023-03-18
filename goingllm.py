@@ -3,6 +3,7 @@ import chardet
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from flask import Flask, request, make_response, send_from_directory
+import gc
 from googleapiclient.discovery import build
 from io import BytesIO
 import json
@@ -87,7 +88,7 @@ def startup():
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid.uuid4())
-        threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride), daemon=True).start()
+        threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile(0, False, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
@@ -330,6 +331,8 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
+
+    gc.collect() #Cleanup
 
 def generate_keywords(usertask, task_id):
     number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
