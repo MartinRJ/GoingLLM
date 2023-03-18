@@ -454,35 +454,38 @@ def truncate_at_last_period_or_newline(text):
                 print("Model not downloaded, downloading " + model_name, flush=True)
                 spacy.cli.download(model_name) # download the models automatically if they are not present
                 nlp = spacy.load(model_name) # Load the model
-                model_loaded = True
             except:
                 print("Could not download and load model " + model_name, flush=True)
+                return truncate_legacy(text)
 
         try:
-            if model_loaded:
-                doc = nlp(text) # Create a spacy document from the text
-                sentences = list(doc.sents) # Create a list of sentences from the document
-                last_sentence = sentences[-1] # Get the last sentence from the list
-                truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
-                return text[:truncate_index] # Cut the text at this index
+            doc = nlp(text) # Create a spacy document from the text
+            sentences = list(doc.sents) # Create a list of sentences from the document
+            last_sentence = sentences[-1] # Get the last sentence from the list
+            truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
+            return text[:truncate_index] # Cut the text at this index
         except Exception as e:
             print("Could not load language. Error: {e}", flush=True)
+            # Fallback to the legacy method
+            return truncate_legacy(text)
     else:
         print("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
-
         #Use the 'legacy' method, of cutting off at the last period or newline character.
-        last_period = text.rfind('.')
-        last_newline = text.rfind('\n')
-        # If neither a dot nor an '\n' is found, the text remains unchanged
-        if last_period == -1 and last_newline == -1:
-            return text
-        # Cut off the text at the point or '\n' that occurs later on
-        truncate_index = max(last_period, last_newline)
-        if truncate_index == last_period:
-            # Add 1 to keep the dot in the text
-            return text[:truncate_index + 1]
-        else:
-            return text[:truncate_index] #do not keep the '\n'
+        return truncate_legacy(text)
+
+def truncate_legacy(text):
+    last_period = text.rfind('.')
+    last_newline = text.rfind('\n')
+    # If neither a dot nor an '\n' is found, the text remains unchanged
+    if last_period == -1 and last_newline == -1:
+        return text
+    # Cut off the text at the point or '\n' that occurs later on
+    truncate_index = max(last_period, last_newline)
+    if truncate_index == last_period:
+        # Add 1 to keep the dot in the text
+        return text[:truncate_index + 1]
+    else:
+        return text[:truncate_index] #do not keep the '\n'
 
 def extract_json(stringwithjson, objectname):
     # Find the start and end indices of the outermost JSON object
