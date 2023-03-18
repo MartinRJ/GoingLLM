@@ -20,6 +20,7 @@ from pptx import Presentation
 import re
 import requests
 import spacy
+import threading
 import tiktoken
 import time
 from urlextract import URLExtract
@@ -86,9 +87,7 @@ def startup():
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid.uuid4())
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(response_task, body, task_id, dogoogleoverride)
-            #future.result()  # Uncomment this line to block and wait for the task to finish
+        threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride), daemon=True).start()
         writefile(0, False, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
