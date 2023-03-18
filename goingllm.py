@@ -138,7 +138,7 @@ def response_task(usertask, task_id, dogoogleoverride):
     # Preprocess user input
     usertask = preprocess_user_input(usertask)
 
-    PROMPT_FINAL_QUERY = "Zu der folgenden Anfrage: >>" + usertask + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
     SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
 
     ALLURLS = []
@@ -175,7 +175,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 # Let ChatGPT pick the most promising
                 gpturls = False
 
-                prompt = "Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>" + usertask + "<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n" + json.dumps(search_google_result) + "\n\nBeispiel-Antwort: {\"weighting\": {\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
+                prompt = f"Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
                 system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
                 #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                 prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
@@ -231,8 +231,12 @@ def response_task(usertask, task_id, dogoogleoverride):
                         continue
                     responsemessage = dlfile
 
-                    prompt = "Es wurde folgende Anfrage gestellt: >>" + usertask + "<<. Im Folgenden findest du den Inhalt einer Seite aus den Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch die URL oder Webseite wenn sie relevant ist.\n\nVon URL: " +  URL + "\nKeyword: \"" + keyword + "\"\nInhalt:\n" + responsemessage
-                    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
+                    prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
+                            f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
+                            f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
+                            f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
+                            f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
+
                     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
 
                     weighting_value = False
@@ -261,11 +265,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                     formatted_text_summary = text_summary.format(URL)
 
                     #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-                    test_finalquery = PROMPT_FINAL_QUERY
-                    for text in searchresults:
-                        if len(text) > 0:
-                            test_finalquery += text
-                    sum_results = calculate_tokens(test_finalquery+formatted_text_summary, SYSTEM_PROMPT_FINAL_QUERY)
+                    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+                    sum_results = calculate_tokens(f"{test_finalquery}{formatted_text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
                     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
                         print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
                         max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
@@ -286,19 +287,18 @@ def response_task(usertask, task_id, dogoogleoverride):
                     responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
                     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
                     #debug_output("Page content - result", responsemessage, system_prompt, 'a')
-                    searchresults.append(formatted_text_summary + responsemessage)
+                    searchresults.append(f"{formatted_text_summary}{responsemessage}")
+
                     has_result = True
         else:
             #no search terms
             has_result = False
             print("No search terms.", flush=True)
 
-        finalquery = PROMPT_FINAL_QUERY
-        has_text = False
-        for text in searchresults:
-            if len(text) > 0:
-                has_text = True
-                finalquery += text
+            finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+
+            # Check if there is any text
+            has_text = len(searchresults) > 0
 
         if has_text:
             print("Final result found, making final query.", flush=True)
@@ -334,35 +334,30 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     gc.collect() #Cleanup
 
+
+
+ 
+
 def generate_keywords(usertask, task_id):
     number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
-    if NUMBER_OF_KEYWORDS == 1:
-        number_entries = "einen Eintrag"
-        number_searches = "eine Suche"
-    else:
-        number_entries = number_keywords + " Einträge"
-        number_searches = number_keywords + "Suchen"
+    number_entries = "einen Eintrag" if NUMBER_OF_KEYWORDS == 1 else f"{number_keywords} Einträge"
+    number_searches = "eine Suche" if NUMBER_OF_KEYWORDS == 1 else f"{number_keywords} Suchen"
 
-    prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgender Anfrage mittels einer Google-Suche zu finden: >>" + usertask + "<<. Wenn die Anfrage dich auffordert nach einer bestimmten Information zu suchen, dann erstelle Suchbegriffe oder -phrasen, welche möglichst genau der Aufforderung in der Anfrage entsprechen. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten. Für spezifische Suchen verwende Google-Filter wie \"site:\", besonders wenn z.B. nach Inhalten von speziellen Seiten gesucht wird, wie Twitter, in dem Fall suche beispielsweise nach: \"<suchbegriff> site:twitter.com\". Nutze gegebenenfalls auch andere Suchfilter wo immer das helfen kann, zum Beispiel: \"<suchbegriff> filetype:xlsx\", wenn eine Suche nach speziellen Formaten hilfreich ist (hier: Excel-Dateien). Oder wo nötig nutze auch den \"site:\"-Filter um Ergebnisse aus einem bestimmten Land zu finden, zum Beispiel: \"<suchbegriff> site:.de\" um nur Inhalte von Deutschen Seiten zu finden."
+    prompt = f"Bitte gib das JSON-Objekt als Antwort zurück, das {number_entries} mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgender Anfrage mittels einer Google-Suche zu finden: >>{usertask}<<. Wenn die Anfrage dich auffordert nach einer bestimmten Information zu suchen, dann erstelle Suchbegriffe oder -phrasen, welche möglichst genau der Aufforderung in der Anfrage entsprechen. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der {number_searches} in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten. Für spezifische Suchen verwende Google-Filter wie \"site:\", besonders wenn z.B. nach Inhalten von speziellen Seiten gesucht wird, wie Twitter, in dem Fall suche beispielsweise nach: \"<suchbegriff> site:twitter.com\". Nutze gegebenenfalls auch andere Suchfilter wo immer das helfen kann, zum Beispiel: \"<suchbegriff> filetype:xlsx\", wenn eine Suche nach speziellen Formaten hilfreich ist (hier: Excel-Dateien). Oder wo nötig nutze auch den \"site:\"-Filter um Ergebnisse aus einem bestimmten Land zu finden, zum Beispiel: \"<suchbegriff> site:.de\" um nur Inhalte von Deutschen Seiten zu finden."
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
+
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
     responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
+    
     if not responsemessage:
         return False # (Fatal) error in chatcompletion
 
-    keywords = [False]
-
-    #Attempt to extract the JSON object from the response
+    # Attempt to extract the JSON object from the response
     jsonobject = extract_json(responsemessage, "keywords")
-
-    if jsonobject:
-        # the function returned a list
-        keywords = jsonobject
-    else:
-        # the function returned False
-        keywords = [False]
+    keywords = jsonobject if jsonobject else [False]
 
     return keywords
+
 
 def should_perform_google_search(usertask, dogoogleoverride, task_id):
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
@@ -378,8 +373,8 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     # Format as a string
     now_str = now.strftime("%Y-%m-%d %H:%M")
 
-    prompt = "Es wurde soeben folgende Anfrage gestellt: >>" + usertask + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage im Anschluss zu erfüllen? Bitte antworte mit \"Ja\" oder \"Nein\". Falls du keinen Zugriff auf Informationen hast die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls du nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wirst), oder deine internen Informationen in Bezug auf die Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt (" + now_str + " UTC), so antworte mit \"Ja\". Bei Anfragen oder Fragen die du mit dem Wissen aus deinen Datenbanken alleine ausreichend beantworten kannst (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte mit \"Nein\". Würdest du weitere Recherche-Ergebnisse aus einer Google-Suche benötigen, um diese Anfrage zufriedenstellend zu beantworten, Ja oder Nein?"
-    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt (" + now_str + " UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
+    prompt = f"Es wurde soeben folgende Anfrage gestellt: >>{usertask}<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage im Anschluss zu erfüllen? Bitte antworte mit \"Ja\" oder \"Nein\". Falls du keinen Zugriff auf Informationen hast die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls du nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wirst), oder deine internen Informationen in Bezug auf die Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte mit \"Ja\". Bei Anfragen oder Fragen die du mit dem Wissen aus deinen Datenbanken alleine ausreichend beantworten kannst (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte mit \"Nein\". Würdest du weitere Recherche-Ergebnisse aus einer Google-Suche benötigen, um diese Anfrage zufriedenstellend zu beantworten, Ja oder Nein?"
+    system_prompt = f"Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
     responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
     print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
@@ -694,10 +689,7 @@ def load_url_content(url):
         return False
 
 def replace_newlines(text):
-    # loop until there are no more occurrences of four newlines
-    while "\n\n\n\n" in text:
-        text = text.replace("\n\n\n\n", "\n")
-    return text
+    return re.sub(r'\n{4,}', '\n', text) #replace all occurrences of four newlines
 
 # Define a function that takes a URL as a parameter and extracts the content
 def extract_content(url):
@@ -837,13 +829,14 @@ def process_ppt_content(filecontent):
     try:
         with BytesIO(filecontent) as f:
             pr = Presentation(f)
-            text = ""
+            text_list = []
             for slide in pr.slides:
                 for shape in slide.shapes:
                     if hasattr(shape, "text"):
-                        text += shape.text + "\n"
-                        if len(text) > MAX_FILE_CONTENT:
+                        text_list.append(shape.text)
+                        if sum(len(s) for s in text_list) > MAX_FILE_CONTENT:
                             break
+            text = "\n".join(text_list)
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
