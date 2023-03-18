@@ -140,9 +140,10 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     ALLURLS = []
 
-    dogooglesearch = should_perform_google_search(usertask, dogoogleoverride) #Should the tool do a google search?
+    dogooglesearch = should_perform_google_search(usertask, dogoogleoverride, task_id) #Should the tool do a google search?
 
     has_result = False
+    final_result = ""
     if dogooglesearch:
         number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
         if NUMBER_OF_KEYWORDS == 1:
@@ -155,7 +156,9 @@ def response_task(usertask, task_id, dogoogleoverride):
         prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgender Anfrage mittels einer Google-Suche zu finden: >>" + usertask + "<<. Wenn die Anfrage dich auffordert nach einer bestimmten Information zu suchen, dann erstelle Suchbegriffe oder -phrasen, welche möglichst genau der Aufforderung in der Anfrage entsprechen. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten. Für spezifische Suchen verwende Google-Filter wie \"site:\", besonders wenn z.B. nach Inhalten von speziellen Seiten gesucht wird, wie Twitter, in dem Fall suche beispielsweise nach: \"<suchbegriff> site:twitter.com\". Nutze gegebenenfalls auch andere Suchfilter wo immer das helfen kann, zum Beispiel: \"<suchbegriff> filetype:xlsx\", wenn eine Suche nach speziellen Formaten hilfreich ist (hier: Excel-Dateien). Oder wo nötig nutze auch den \"site:\"-Filter um Ergebnisse aus einem bestimmten Land zu finden, zum Beispiel: \"<suchbegriff> site:.de\" um nur Inhalte von Deutschen Seiten zu finden."
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
         prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
-        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS)
+        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
+        if not responsemessage:
+            return # (Fatal) error in chatcompletion
 
         keywords = [False]
 
@@ -200,7 +203,9 @@ def response_task(usertask, task_id, dogoogleoverride):
                 #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
                 prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
                 #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH)
+                responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+                if not responsemessage:
+                    return # (Fatal) error in chatcompletion
                 weighting = extract_json(responsemessage, "weighting")
 
                 print("weighting content: " + json.dumps(weighting), flush=True)
@@ -298,11 +303,13 @@ def response_task(usertask, task_id, dogoogleoverride):
                         continue
                     prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
-                    result_summary = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
-                    result_summary = truncate_at_last_period_or_newline(result_summary) #Make sure result_summary ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
+                    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
+                    if not responsemessage:
+                        return # (Fatal) error in chatcompletion
+                    responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
                     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                    #debug_output("Page content - result", result_summary, system_prompt, 'a')
-                    searchresults.append(formatted_text_summary + result_summary)
+                    #debug_output("Page content - result", responsemessage, system_prompt, 'a')
+                    searchresults.append(formatted_text_summary + responsemessage)
                     has_result = True
         else:
             #no search terms
@@ -322,8 +329,10 @@ def response_task(usertask, task_id, dogoogleoverride):
             #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
             finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
             finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
-            final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
-            #final_result = escape_result(final_result)
+            final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+            if not final_result:
+                return # (Fatal) error in chatcompletion
+
             #debug_output("final query", finalquery, system_prompt, 'a') #----Debug Output
             has_result = True
         else:
@@ -338,13 +347,15 @@ def response_task(usertask, task_id, dogoogleoverride):
         #Make a regular query
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
         usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
-        final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
+        final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+        if not final_result:
+            return # (Fatal) error in chatcompletion
         #final_result = escape_result(final_result)
 
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
 
-def should_perform_google_search(usertask, dogoogleoverride):
+def should_perform_google_search(usertask, dogoogleoverride, task_id):
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
     if dogoogleoverride:
@@ -361,7 +372,7 @@ def should_perform_google_search(usertask, dogoogleoverride):
     prompt = "Es wurde soeben folgende Anfrage gestellt: >>" + usertask + "<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage im Anschluss zu erfüllen? Bitte antworte mit \"Ja\" oder \"Nein\". Falls du keinen Zugriff auf Informationen hast die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls du nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wirst), oder deine internen Informationen in Bezug auf die Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt (" + now_str + " UTC), so antworte mit \"Ja\". Bei Anfragen oder Fragen die du mit dem Wissen aus deinen Datenbanken alleine ausreichend beantworten kannst (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte mit \"Nein\". Würdest du weitere Recherche-Ergebnisse aus einer Google-Suche benötigen, um diese Anfrage zufriedenstellend zu beantworten, Ja oder Nein?"
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt (" + now_str + " UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
-    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE)
+    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
     print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
     dogooglesearch = yes_or_no(responsemessage)
     return dogooglesearch
@@ -372,18 +383,25 @@ def preprocess_user_input(usertask):
         usertask = usertask.replace("<<", "»").replace(">>", "«")
     return usertask
 
-def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens):
-    response = openai.ChatCompletion.create(
-    model=MODEL,
-    temperature=completiontemperature,
-    max_tokens=completionmaxtokens,
-    messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt, flush=True)
-    return response['choices'][0]['message']['content']
+def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id):
+    try:
+        response = openai.ChatCompletion.create(
+        model=MODEL,
+        temperature=completiontemperature,
+        max_tokens=completionmaxtokens,
+        messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt, flush=True)
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        Errormessage = "Error occured in chatcompletion: {e}"
+        print(Errormessage, flush=True)
+        writefile(100, Errormessage, task_id)
+        return False
+    
 
 def debug_output(note, string, system_prompt, mode):
     messages = [
