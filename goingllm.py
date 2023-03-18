@@ -445,14 +445,26 @@ def truncate_at_last_period_or_newline(text):
 
     # Check if the recognised language has a spacy model
     if language in spacy_models:
+        model_loaded = False
+        model_name = spacy_models[language] # Get the model name from the dictionary
         try:
-            model_name = spacy_models[language] # Get the model name from the dictionary
             nlp = spacy.load(model_name) # Load the model
-            doc = nlp(text) # Create a spacy document from the text
-            sentences = list(doc.sents) # Create a list of sentences from the document
-            last_sentence = sentences[-1] # Get the last sentence from the list
-            truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
-            return text[:truncate_index] # Cut the text at this index
+        except:
+            try:
+                print("Model not downloaded, downloading " + model_name, flush=True)
+                spacy.cli.download(model_name) # download the models automatically if they are not present
+                nlp = spacy.load(model_name) # Load the model
+                model_loaded = True
+            except:
+                print("Could not download and load model " + model_name, flush=True)
+
+        try:
+            if model_loaded:
+                doc = nlp(text) # Create a spacy document from the text
+                sentences = list(doc.sents) # Create a list of sentences from the document
+                last_sentence = sentences[-1] # Get the last sentence from the list
+                truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
+                return text[:truncate_index] # Cut the text at this index
         except Exception as e:
             print("Could not load language. Error: {e}", flush=True)
     else:
