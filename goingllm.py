@@ -295,10 +295,10 @@ def response_task(usertask, task_id, dogoogleoverride):
             has_result = False
             print("No search terms.", flush=True)
 
-            finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
 
-            # Check if there is any text
-            has_text = len(searchresults) > 0
+        finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+        # Check if there is any text
+        has_text = len(searchresults) > 0
 
         if has_text:
             print("Final result found, making final query.", flush=True)
