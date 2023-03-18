@@ -5,6 +5,7 @@ from flask import Flask, request, make_response, send_from_directory
 from googleapiclient.discovery import build
 from io import BytesIO
 import json
+from langdetect import detect
 import markdown
 import mimetypes
 from num2words import num2words
@@ -17,6 +18,7 @@ from pdfminer.layout import LAParams
 from pptx import Presentation
 import re
 import requests
+import spacy
 import threading
 import tiktoken
 import time
@@ -135,8 +137,7 @@ def response_task(usertask, task_id, dogoogleoverride):
     usertask = preprocess_user_input(usertask)
 
     PROMPT_FINAL_QUERY = "Zu der folgenden Anfrage: >>" + usertask + "<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
-    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht sieht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
-
+    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
 
     ALLURLS = []
 
@@ -145,36 +146,10 @@ def response_task(usertask, task_id, dogoogleoverride):
     has_result = False
     final_result = ""
     if dogooglesearch:
-        number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
-        if NUMBER_OF_KEYWORDS == 1:
-            number_entries = "einen Eintrag"
-            number_searches = "eine Suche"
-        else:
-            number_entries = number_keywords + " Einträge"
-            number_searches = number_keywords + "Suchen"
-
-        prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgender Anfrage mittels einer Google-Suche zu finden: >>" + usertask + "<<. Wenn die Anfrage dich auffordert nach einer bestimmten Information zu suchen, dann erstelle Suchbegriffe oder -phrasen, welche möglichst genau der Aufforderung in der Anfrage entsprechen. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten. Für spezifische Suchen verwende Google-Filter wie \"site:\", besonders wenn z.B. nach Inhalten von speziellen Seiten gesucht wird, wie Twitter, in dem Fall suche beispielsweise nach: \"<suchbegriff> site:twitter.com\". Nutze gegebenenfalls auch andere Suchfilter wo immer das helfen kann, zum Beispiel: \"<suchbegriff> filetype:xlsx\", wenn eine Suche nach speziellen Formaten hilfreich ist (hier: Excel-Dateien). Oder wo nötig nutze auch den \"site:\"-Filter um Ergebnisse aus einem bestimmten Land zu finden, zum Beispiel: \"<suchbegriff> site:.de\" um nur Inhalte von Deutschen Seiten zu finden."
-        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
-        prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
-        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
-        if not responsemessage:
-            return # (Fatal) error in chatcompletion
-
-        keywords = [False]
-
-        #Attempt to extract the JSON object from the response
-        jsonobject = extract_json(responsemessage, "keywords")
-
-        if jsonobject:
-            # the function returned a list
-            keywords = jsonobject
-        else:
-            # the function returned False
-            keywords = [False]
-
+        keywords = generate_keywords(usertask, task_id)
         ergebnis = False
         if not keywords:
-            ergebnis = False
+            return # (Fatal) error in chatcompletion
         elif all(isinstance(item, str) for item in keywords):
             ergebnis = True
         else:
@@ -355,6 +330,36 @@ def response_task(usertask, task_id, dogoogleoverride):
     #html = markdown.markdown(responsemessage)
     writefile(100, final_result, task_id)
 
+def generate_keywords(usertask, task_id):
+    number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
+    if NUMBER_OF_KEYWORDS == 1:
+        number_entries = "einen Eintrag"
+        number_searches = "eine Suche"
+    else:
+        number_entries = number_keywords + " Einträge"
+        number_searches = number_keywords + "Suchen"
+
+    prompt = "Bitte gib das JSON-Objekt als Antwort zurück, das "+ number_entries + " mit dem Schlüssel 'keywords' enthält, mit den am besten geeigneten Suchbegriffen oder -phrasen, um relevante Informationen zu folgender Anfrage mittels einer Google-Suche zu finden: >>" + usertask + "<<. Wenn die Anfrage dich auffordert nach einer bestimmten Information zu suchen, dann erstelle Suchbegriffe oder -phrasen, welche möglichst genau der Aufforderung in der Anfrage entsprechen. Berücksichtige dabei Synonyme und verwandte Begriffe und ordne die Suchbegriffe in einer Reihenfolge an, die am wahrscheinlichsten zu erfolgreichen Suchergebnissen führt. Berücksichtige, dass die Ergebnisse der "+ number_searches + " in Kombination verwendet werden sollen, also kannst du bei Bedarf nach einzelnen Informationen suchen. Nutze für die Keywords diejenige Sprache die am besten geeignet ist um relevante Suchergebnisse zu erhalten. Für spezifische Suchen verwende Google-Filter wie \"site:\", besonders wenn z.B. nach Inhalten von speziellen Seiten gesucht wird, wie Twitter, in dem Fall suche beispielsweise nach: \"<suchbegriff> site:twitter.com\". Nutze gegebenenfalls auch andere Suchfilter wo immer das helfen kann, zum Beispiel: \"<suchbegriff> filetype:xlsx\", wenn eine Suche nach speziellen Formaten hilfreich ist (hier: Excel-Dateien). Oder wo nötig nutze auch den \"site:\"-Filter um Ergebnisse aus einem bestimmten Land zu finden, zum Beispiel: \"<suchbegriff> site:.de\" um nur Inhalte von Deutschen Seiten zu finden."
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
+    prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
+    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
+    if not responsemessage:
+        return False # (Fatal) error in chatcompletion
+
+    keywords = [False]
+
+    #Attempt to extract the JSON object from the response
+    jsonobject = extract_json(responsemessage, "keywords")
+
+    if jsonobject:
+        # the function returned a list
+        keywords = jsonobject
+    else:
+        # the function returned False
+        keywords = [False]
+
+    return keywords
+
 def should_perform_google_search(usertask, dogoogleoverride, task_id):
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
     dogooglesearch = False
@@ -424,18 +429,48 @@ def debug_output(note, string, system_prompt, mode):
         print("Could not write file", flush=True)
 
 def truncate_at_last_period_or_newline(text):
-    last_period = text.rfind('.')
-    last_newline = text.rfind('\n')
-    # If neither a dot nor an '\n' is found, the text remains unchanged
-    if last_period == -1 and last_newline == -1:
-        return text
-    # Cut off the text at the point or '\n' that occurs later on
-    truncate_index = max(last_period, last_newline)
-    if truncate_index == last_period:
-        # Add 1 to keep the dot in the text
-        return text[:truncate_index + 1]
+    language = detect(text) # Detect the language of the text
+
+    # Create a dictionary of language codes to spacy model names
+    spacy_models = {
+        "en": "en_core_web_sm",
+        "de": "de_core_news_sm",
+        "fr": "fr_core_news_sm",
+        "es": "es_core_news_sm",
+        "pt": "pt_core_news_sm",
+        "it": "it_core_news_sm",
+        "nl": "nl_core_news_sm",
+        "el": "el_core_news_sm"
+    }
+
+    # Check if the recognised language has a spacy model
+    if language in spacy_models:
+        try:
+            model_name = spacy_models[language] # Get the model name from the dictionary
+            nlp = spacy.load(model_name) # Load the model
+            doc = nlp(text) # Create a spacy document from the text
+            sentences = list(doc.sents) # Create a list of sentences from the document
+            last_sentence = sentences[-1] # Get the last sentence from the list
+            truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
+            return text[:truncate_index] # Cut the text at this index
+        except Exception as e:
+            print("Could not load language. Error: {e}", flush=True)
     else:
-        return text[:truncate_index] #do not keep the '\n'
+        print("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
+
+        #Use the 'legacy' method, of cutting off at the last period or newline character.
+        last_period = text.rfind('.')
+        last_newline = text.rfind('\n')
+        # If neither a dot nor an '\n' is found, the text remains unchanged
+        if last_period == -1 and last_newline == -1:
+            return text
+        # Cut off the text at the point or '\n' that occurs later on
+        truncate_index = max(last_period, last_newline)
+        if truncate_index == last_period:
+            # Add 1 to keep the dot in the text
+            return text[:truncate_index + 1]
+        else:
+            return text[:truncate_index] #do not keep the '\n'
 
 def extract_json(stringwithjson, objectname):
     # Find the start and end indices of the outermost JSON object
