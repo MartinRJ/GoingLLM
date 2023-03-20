@@ -124,6 +124,13 @@
 					this.locked = false;
 				}
 			}
+			// SUCCESS/ERROR CODES
+			const FINAL_RESULT_CODE_ERROR_INPUT = "-700" // Error with input
+			const FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS = "-500" // Error in ChatCompletions API
+			const FINAL_RESULT_CODE_ERROR_CUSTOMSEARCH = "-400" // Error in Custom Search API
+			const FINAL_RESULT_CODE_ERROR_OTHER_CUSTOM = "-600" // Other Error - error message in final_result
+			const FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH = "100" // Success (ChatCompletions-only result)
+			const FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH = "200" // Success (successfully used Custom Search API)
 
 			// create a global Mutex instance
 			const mutex = new Mutex();
@@ -207,11 +214,34 @@
 								clearInterval(intervalId);
 								// extract and use the answer value here
 								var answer = data["answer"];
-								var decodedText = decodeURIComponent(encodeURIComponent(answer));
+								var progress = data["progress"];
+								switch(progress)
+								{
+									case FINAL_RESULT_CODE_ERROR_INPUT:
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + "Input error";
+										break;
+									case FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS:
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + "Error in chat completions";
+										break;
+									case FINAL_RESULT_CODE_ERROR_CUSTOMSEARCH:
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + "Error in search";
+										break;
+									case FINAL_RESULT_CODE_ERROR_OTHER_CUSTOM:
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + "Error";
+										break;
+									case FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH:
+											var decodedText = decodeURIComponent(encodeURIComponent(answer));
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + decodedText;
+										break;
+									case FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH :
+											var decodedText = decodeURIComponent(encodeURIComponent(answer));
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + decodedText;
+										break;
+									default:
+										Console.log("Unknown error: " + progress + "; Answer-property: " + answer)
+								}
 								var progressBar = document.getElementById("progress");
 								progressBar.style.width = "0%";
-
-								document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + decodedText;
 							} else if (data.hasOwnProperty("progress"))
 							{
 								if (counter !== 0)
