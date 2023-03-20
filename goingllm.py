@@ -69,11 +69,7 @@ openai.api_key = SECRET_KEY
 
 @app.route("/", methods=['POST'])
 def startup():
-    auth = request.authorization #Basic authentication
-    if not auth or not (auth.username == AUTH_UNAME and auth.password == AUTH_PASS):
-        response = make_response('Could not verify your login!', 401)
-        response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
-        return response
+    doauthorization()
     try:
         body = request.get_data(as_text=True)
         if not body:
@@ -106,8 +102,16 @@ def startup():
         response.headers['task_id'] = task_id
         return response
 
+def doauthorization():
+    auth = request.authorization #Basic authentication
+    if not auth or not (auth.username == AUTH_UNAME and auth.password == AUTH_PASS):
+        response = make_response('Could not verify your login!', 401)
+        response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
+        return response
+
 @app.route('/searches/<filename>')
 def download_file(filename):
+    doauthorization()
     return send_from_directory('searches', filename)
 
 @app.route('/')
@@ -120,8 +124,9 @@ def static_files(path):
 
 @app.route('/tmp/log.txt')
 def serve_log_file():
+    doauthorization()
     try:
-        return send_file('tmp/log.txt', as_attachment=True, attachment_filename='log.txt')
+        return send_file('tmp/log.txt', as_attachment=True, download_name='log.txt')
     except Exception as e:
         return str(e)
 
