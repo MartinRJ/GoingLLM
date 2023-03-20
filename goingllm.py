@@ -326,7 +326,7 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
                     max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
             #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-            text_summary = "\nZusammenfassung der Ergebnisse von \"{}\": "
+            text_summary = f"\nZusammenfassung der Ergebnisse von \"{}\": "
             formatted_text_summary = text_summary.format(URL)
 
             #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
@@ -429,7 +429,7 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
         print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt, flush=True)
         return response['choices'][0]['message']['content']
     except Exception as e:
-        Errormessage = "Error occured in chatcompletion: {e}"
+        Errormessage = f"Error occured in chatcompletion: {e}"
         print(Errormessage, flush=True)
         writefile("100", Errormessage, task_id)
         return False
