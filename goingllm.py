@@ -226,22 +226,26 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
     with Manager() as manager:
         ALLURLS = manager.dict()
         ALLURLS_lock = Lock()
-        zaehler = Value('i', 0)
-        zaehler_lock = Lock()
+        counter = Value('i', 0)
+        counter_lock = Lock()
         searchresults = manager.list()
 
         processes = []
         for keyword in keywords:
-            process = Process(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, ALLURLS_lock, searchresults))
+            process = Process(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults))
             process.start()
             processes.append(process)
         
         for process in processes:
             process.join()
 
-    return list(searchresults)
+    try:
+        return list(searchresults)
+    except Exception as e:
+        print(f"An error occurred while converting search results to list: {e}")
+        return None
 
-def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, ALLURLS_lock, searchresults):
+def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
     #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
     google_result = None
@@ -298,9 +302,9 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         return
     # The function has returned a list of URLs
     for URL in google_result:
-        with zaehler_lock:
-            percent = str(zaehler.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
-            zaehler.value += 1
+        with counter_lock:
+            percent = str(counter.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            counter.value += 1
 
         writefile(percent, False, task_id)
 
