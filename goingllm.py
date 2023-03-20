@@ -26,6 +26,7 @@ import spacy
 import threading
 import tiktoken
 import time
+import traceback
 from urlextract import URLExtract
 import uuid
 app = Flask(__name__)
@@ -942,6 +943,7 @@ def debuglog(text, create=False):
             f.writelines([text, "\n--------------------\n"])
     except Exception as e:
         print(f"Error debuglog: could not write to file: {e}", flush=True)
+        traceback.print_exc()
 
 if __name__ == "__main__":
     app.run()
