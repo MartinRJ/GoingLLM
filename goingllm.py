@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 import chardet
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from datetime import datetime
 from flask import Flask, request, make_response, send_from_directory
 import gc
@@ -48,6 +48,7 @@ MAX_TOKENS_FINAL_RESULT = int(os.getenv('FINALRESULT_MAX_TOKEN_LENGTH'))
 TEMPERATURE_SELECT_SEARCHES = float(os.getenv('temperature_select_searches'))
 MAX_TOKENS_SELECT_SEARCHES_LENGTH = int(os.getenv('SELECT_SEARCHES_MAX_TOKEN_LENGTH'))
 BODY_MAX_LENGTH = int(os.getenv('BODY_MAX_LENGTH'))
+GLOBAL_CHATCOMPLETION_TIMEOUT = int(os.getenv('GLOBAL_CHATCOMPLETION_TIMEOUT'))
 
 #SUCCESS/ERROR CODES
 FINAL_RESULT_CODE_ERROR_INPUT = "-700" # Error with input
@@ -213,7 +214,7 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     if not regular:
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und muss auf deine Anfrage leider gerade ohne Internetrecherche antworten. Ich hatte zwar zuvor entschieden, dass zur Beantwortung deiner Anfrage eine Internetrecherche nötig oder hilfreich wäre, jedoch gab es leider einen Fehler bei der Internetrecherche."
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
-    final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    final_result = chatcompletion_with_timeout(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
@@ -221,7 +222,7 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
     #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
-    final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    final_result = chatcompletion_with_timeout(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
 
 def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
@@ -267,7 +268,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
     #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     weighting = extract_json(responsemessage, "weighting")
@@ -378,7 +379,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
             continue
         prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
-        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
+        responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
         if not responsemessage:
             return None # (Fatal) error in chatcompletion
         responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
@@ -405,7 +406,7 @@ def generate_keywords(usertask, task_id):
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
 
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
-    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
     
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
@@ -433,7 +434,7 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     prompt = f"Es wurde soeben folgende Anfrage gestellt: >>{usertask}<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage im Anschluss zu erfüllen? Bitte antworte mit \"Ja\" oder \"Nein\". Falls du keinen Zugriff auf Informationen hast die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls du nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wirst), oder deine internen Informationen in Bezug auf die Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte mit \"Ja\". Bei Anfragen oder Fragen die du mit dem Wissen aus deinen Datenbanken alleine ausreichend beantworten kannst (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte mit \"Nein\". Würdest du weitere Recherche-Ergebnisse aus einer Google-Suche benötigen, um diese Anfrage zufriedenstellend zu beantworten, Ja oder Nein?"
     system_prompt = f"Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
-    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
@@ -464,6 +465,24 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
         print(Errormessage, flush=True)
         writefile("100", Errormessage, task_id)
         return False
+
+def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens, task_id)
+        
+        try:
+            response = future.result(timeout)
+            return response
+        except concurrent.futures.TimeoutError:
+            Errormessage = f"Error: chatcompletion timed out after {timeout} seconds"
+            print(Errormessage, flush=True)
+            writefile("100", Errormessage, task_id)
+            return False
+        except Exception as e:
+            Errormessage = f"Error occured in chatcompletion_with_timeout: {e}"
+            print(Errormessage, flush=True)
+            writefile("100", Errormessage, task_id)
+            return False
 
 def debug_output(note, string, system_prompt, mode):
     messages = [

@@ -86,6 +86,10 @@ NUMBER_GOOGLE_RESULTS
 SECRETKEY  
 [Your secret OpenAI key.]
 
+GLOBAL_CHATCOMPLETION_TIMEOUT..
+10..
+[Timeout for Chatcompletion requests in seconds; After that the wait_for function will time out and raise a TimeoutError, otherwise the program would have to wait for the API response, which has a max unchangeable timeout of 600s.]
+
 SUMMARIZE_MAX_TOKEN_LENGTH  
 300  
 [The ChatGPT token length for summarizing the individual Google search results.]
@@ -141,12 +145,14 @@ Backend and enhancing the Backend for a More Intelligent Tool:
 • Refine the search flow to make it more intelligent and responsive to user queries.  
 • Allow GPT to determine if it needs more Google results and if it wants to adjust the keywords.  
 • Explain to GPT what the tool is doing and how it works.  
-• Provide source information, i.e. URLs in the final query.
+• Provide source information, i.e. URLs in the final query.  
+• Fallback to alpaca when the OpenAI API is not responding.
 
 Testing, Bugs and Error Handling:  
 • Test the tool's handling of Powerpoint and plaintext files.  
 • Implement client-side error handling if the .json file does not exist.  
-• Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.
+• Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.  
+• Writing unit tests.
 
 
 I have heavily used ChatGPT and Bing Chat to create this program in less than a day. What a time to be alive!
