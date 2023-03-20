@@ -207,7 +207,7 @@ def generate_final_result_without_search(usertask, task_id):
 
 def generate_final_response_without_search_results(usertask, task_id):
     #Make a regular query
-    system_prompt = "Ich bin dein persönlicher Assistent"
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und antworte gerade ohne Internetrecherche, da die Anfrage keine Internetrecherche benötigte."
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
     final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
