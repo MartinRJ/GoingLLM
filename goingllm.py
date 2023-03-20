@@ -10,6 +10,7 @@ import json
 from langdetect import detect
 import markdown
 import mimetypes
+from multiprocessing import Process, Manager, Value, Lock
 from num2words import num2words
 import openai
 import openpyxl
@@ -222,20 +223,25 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
     return final_result
 
 def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    ALLURLS = queue.Queue()
-    searchresults = queue.Queue()
-    zaehler = [0]
-    zaehler_lock = threading.Lock()
-    threads = []
-    for keyword in keywords:
-        thread = threading.Thread(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, searchresults))
-        thread.start()
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
-    return list(searchresults.queue)
+    with Manager() as manager:
+        ALLURLS = manager.list()
+        ALLURLS_lock = Lock()
+        zaehler = Value('i', 0)
+        zaehler_lock = Lock()
+        searchresults = manager.list()
 
-def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, searchresults):
+        processes = []
+        for keyword in keywords:
+            process = Process(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, ALLURLS_lock, searchresults))
+            process.start()
+            processes.append(process)
+        
+        for process in processes:
+            process.join()
+
+    return list(searchresults)
+
+def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
     #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
     google_result = None
@@ -293,20 +299,21 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     # The function has returned a list of URLs
     for URL in google_result:
         with zaehler_lock:
-            percent = str(zaehler[0] / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
-            writefile(percent, False, task_id)
-            zaehler[0] += 1
+            percent = str(zaehler.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            zaehler.value += 1
+
+        writefile(percent, False, task_id)
 
         # Check if URL is in ALLURLS
         exists_in_queue = False
-        with ALLURLS.mutex:
-            if URL in ALLURLS.queue:
+        with ALLURLS_lock:
+            if URL in ALLURLS:
                 exists_in_queue = True
-
+            else:
+                ALLURLS[URL] = True
         if exists_in_queue:
             continue  # Exists already
 
-        ALLURLS.put(URL)
         print("Here are the URLs: " + URL, flush=True)
         dlfile = extract_content(URL)
         if not dlfile:
@@ -349,7 +356,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
 
         #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-        test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in list(searchresults.queue) if len(text) > 0])
+        test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
         sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
         if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
             print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
@@ -371,7 +378,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
         #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
         #debug_output("Page content - result", responsemessage, system_prompt, 'a')
-        searchresults.put(f"{text_summary}{responsemessage}")
+        searchresults.append(f"{text_summary}{responsemessage}")
 
 def valid_keywords(keywords):
     if not keywords:
