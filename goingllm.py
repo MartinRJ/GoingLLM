@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import chardet
 import concurrent.futures
 from datetime import datetime
-from flask import Flask, request, make_response, send_file, send_from_directory
+from flask import Flask, request, make_response, send_from_directory
 import gc
 from googleapiclient.discovery import build
 from io import BytesIO
@@ -69,7 +69,9 @@ openai.api_key = SECRET_KEY
 
 @app.route("/", methods=['POST'])
 def startup():
-    doauthorization()
+    authd = doauthorization()
+    if authd:
+        return authd
     try:
         body = request.get_data(as_text=True)
         if not body:
@@ -108,10 +110,14 @@ def doauthorization():
         response = make_response('Could not verify your login!', 401)
         response.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
         return response
+    else:
+        return False
 
 @app.route('/searches/<filename>')
 def download_file(filename):
-    doauthorization()
+    authd = doauthorization()
+    if authd:
+        return authd
     return send_from_directory('searches', filename)
 
 @app.route('/')
@@ -124,9 +130,11 @@ def static_files(path):
 
 @app.route('/tmp/log.txt')
 def serve_log_file():
-    doauthorization()
+    authd = doauthorization()
+    if authd:
+        return authd
     try:
-        return send_file('tmp/log.txt', as_attachment=True, download_name='log.txt')
+        return send_from_directory('tmp', 'log.txt')
     except Exception as e:
         return str(e)
 
