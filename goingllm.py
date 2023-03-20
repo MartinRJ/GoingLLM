@@ -463,7 +463,6 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
     except Exception as e:
         Errormessage = f"Error occured in chatcompletion: {e}"
         print(Errormessage, flush=True)
-        writefile("100", Errormessage, task_id)
         return False
 
 def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
@@ -476,12 +475,10 @@ def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, co
         except concurrent.futures.TimeoutError:
             Errormessage = f"Error: chatcompletion timed out after {timeout} seconds"
             print(Errormessage, flush=True)
-            writefile("100", Errormessage, task_id)
             return False
         except Exception as e:
             Errormessage = f"Error occured in chatcompletion_with_timeout: {e}"
             print(Errormessage, flush=True)
-            writefile("100", Errormessage, task_id)
             return False
 
 def debug_output(note, string, system_prompt, mode):
