@@ -405,7 +405,9 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
         #debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
         #debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+        debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
         searchresults.append(f"{text_summary}{responsemessage}")
+        debuglog(f"Appending successful.")
 
 def valid_keywords(keywords):
     if not keywords:
