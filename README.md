@@ -87,7 +87,7 @@ SECRETKEY
 [Your secret OpenAI key.]
 
 GLOBAL_CHATCOMPLETION_TIMEOUT  
-16  
+42  
 [Timeout for Chatcompletion requests in seconds; After that the wait_for function will time out and raise a TimeoutError, otherwise the program would have to wait for the API response, which has a max unchangeable timeout of 600s.]
 
 SUMMARIZE_MAX_TOKEN_LENGTH  
