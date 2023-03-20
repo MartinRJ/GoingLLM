@@ -224,7 +224,7 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
 
 def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
     with Manager() as manager:
-        ALLURLS = manager.list()
+        ALLURLS = manager.dict()
         ALLURLS_lock = Lock()
         zaehler = Value('i', 0)
         zaehler_lock = Lock()
