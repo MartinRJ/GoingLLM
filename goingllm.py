@@ -207,7 +207,7 @@ def generate_final_result_without_search(usertask, task_id):
 
 def generate_final_response_without_search_results(usertask, task_id):
     #Make a regular query
-    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und antworte gerade ohne Internetrecherche, da die Anfrage keine Internetrecherche benötigte."
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und antworte gerade ohne Internetrecherche, da ich zuvor entschieden habe, dass die Anfrage keine Internetrecherche benötigte."
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
     final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
@@ -432,7 +432,6 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
         print(Errormessage, flush=True)
         writefile("100", Errormessage, task_id)
         return False
-    
 
 def debug_output(note, string, system_prompt, mode):
     messages = [
@@ -562,7 +561,6 @@ def calculate_available_tokens(token_reserved_for_response):
         return 0
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
-
 
 def calculate_tokens(string, system_prompt):
     # Calculate tokens. Set system_prompt to False to only count a single string, otherwise the entire message will be counted.
