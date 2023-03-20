@@ -159,7 +159,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("Chatcompletions error in should_perform_google_search", flush=True)
             else:
                 print("No Google search necessary. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id, False)
     elif dogooglesearch:
         print("With Google-search, generating keywords.", flush=True)
         keywords = generate_keywords(usertask, task_id)
@@ -168,7 +168,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("Chatcompletions error in generate_keywords", flush=True)
             else:
                 print("No search terms. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
         elif valid_keywords(keywords):
             print("Keywords are valid, starting search.", flush=True)
             searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
@@ -177,7 +177,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     print("Chatcompletions error in process_keywords_and_search", flush=True)
                 else:
                     print("Searchresults are empty. Generating final response without search results.", flush=True)
-                final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
+                final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
             else:
                 print("Got search results, generating final results.", flush=True)
                 final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
@@ -189,16 +189,16 @@ def response_task(usertask, task_id, dogoogleoverride):
                     final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
             print("Keywords are not valid. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
 
     #html = markdown.markdown(responsemessage)
     writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
 
-def generate_final_result_without_search(usertask, task_id):
-    #Perform and evaluate final regular request (without searchresults)
-    final_result = generate_final_response_without_search_results(usertask, task_id)
+def generate_final_result_without_search(usertask, task_id, regular):
+    #Perform and evaluate final regular request (without searchresults). 'regular' determines whether this was called due to an error (regular=False).
+    final_result = generate_final_response_without_search_results(usertask, task_id, regular)
     if final_result == None:
         print("Chatcompletions error in generate_final_response_without_search_results", flush=True)
         final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
@@ -207,9 +207,11 @@ def generate_final_result_without_search(usertask, task_id):
         final_result_code = FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH
     return final_result, final_result_code
 
-def generate_final_response_without_search_results(usertask, task_id):
+def generate_final_response_without_search_results(usertask, task_id, regular):
     #Make a regular query
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und antworte gerade ohne Internetrecherche, da ich zuvor entschieden habe, dass die Anfrage keine Internetrecherche benötigt."
+    if not regular:
+        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und muss auf deine Anfrage leider gerade ohne Internetrecherche antworten. Ich hatte zwar zuvor entschieden, dass zur Beantwortung deiner Anfrage eine Internetrecherche nötig oder hilfreich wäre, jedoch gab es leider einen Fehler bei der Internetrecherche."
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
     final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
