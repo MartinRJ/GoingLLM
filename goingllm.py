@@ -18,6 +18,7 @@ import pandas as pd
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams
 from pptx import Presentation
+import queue
 import re
 import requests
 import spacy
@@ -221,138 +222,156 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
     return final_result
 
 def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    ALLURLS = []
-    searchresults = []
-    zaehler = 0
+    ALLURLS = queue.Queue()
+    searchresults = queue.Queue()
+    zaehler = [0]
+    zaehler_lock = threading.Lock()
+    threads = []
     for keyword in keywords:
-        search_google_result = search_google(keyword)
-        #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
-        google_result = None
-        if search_google_result is None: #Skip if nothing was found or there was an error in search
-            continue
-        for search_result in search_google_result['searchresults']:
-            for key in search_result:
-                if not google_result is None:
-                    google_result.append(search_result[key]['url'])
-                else:
-                    google_result = [search_result[key]['url']]
-        # Let ChatGPT pick the most promising
-        gpturls = False
+        thread = threading.Thread(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, searchresults))
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
+    return list(searchresults.queue)
 
-        prompt = f"Bitte wähle die Reihenfolge der vielversprechendsten Google-Ergebnisse aus der folgenden Liste aus die für dich - würden dir die Inhalte der jeweiligen URL zur Verfügung gestellt - zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
-        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
+def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, zaehler, zaehler_lock, ALLURLS, searchresults):
+    search_google_result = search_google(keyword)
+    #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
+    google_result = None
+    if search_google_result is None: #Skip if nothing was found or there was an error in search
+        return
+    for search_result in search_google_result['searchresults']:
+        for key in search_result:
+            if not google_result is None:
+                google_result.append(search_result[key]['url'])
+            else:
+                google_result = [search_result[key]['url']]
+    # Let ChatGPT pick the most promising
+    gpturls = False
+
+    prompt = f"Bitte wähle die Reihenfolge der vielversprechendsten Google-Ergebnisse aus der folgenden Liste aus die für dich - würden dir die Inhalte der jeweiligen URL zur Verfügung gestellt - zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
+    #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
+    prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
+    #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+    if not responsemessage:
+        return None # (Fatal) error in chatcompletion
+    weighting = extract_json(responsemessage, "weighting")
+
+    print("weighting content: " + json.dumps(weighting), flush=True)
+    print("search_google_result content: " + json.dumps(search_google_result), flush=True)
+    if weighting:
+        # the function returned a dictionary, re-sort
+        sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
+        gpturls = {}
+        for index, _ in sorted_weighting:
+            if int(index) > len(search_google_result['searchresults'])-1:
+                break
+            gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
+    else:
+        # the function returned False, resume unaltered
+        print("No results of initial sort.", flush=True)
+
+    # Check for links in the original task
+    extractor = URLExtract()
+    urls = extractor.find_urls(usertask)
+    if len(urls) > 0:
+        # use a list comprehension to add https:// to each url if needed
+        urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
+        if google_result is None:
+            google_result = urls
+        else:
+            google_result[:0] = urls
+
+    # Check if the result is None
+    if google_result is None:
+        # The function has returned an error
+        print("There was an error in the search.", flush=True)
+        return
+    # The function has returned a list of URLs
+    for URL in google_result:
+        with zaehler_lock:
+            percent = str(zaehler[0] / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            writefile(percent, False, task_id)
+            zaehler[0] += 1
+
+        # Check if URL is in ALLURLS
+        exists_in_queue = False
+        with ALLURLS.mutex:
+            if URL in ALLURLS.queue:
+                exists_in_queue = True
+
+        if exists_in_queue:
+            continue  # Exists already
+
+        ALLURLS.put(URL)
+        print("Here are the URLs: " + URL, flush=True)
+        dlfile = extract_content(URL)
+        if not dlfile:
+            responsemessage = "Error"
+            print("Error summarizing URL content: " + URL, flush=True)
+            continue
+        responsemessage = dlfile
+
+        prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
+                f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
+                f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
+                f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
+                f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
+        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
+
         #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
-        prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
-        #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+
+        weighting_value = False
+        if gpturls:
+            if URL in gpturls.values():
+                # Find the corresponding key in the gpturls dictionary
+                key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
+                # Get the weighting value for the key
+                weighting_value = float(weighting[key])
+
+        max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
+
+        #Check if there's a weighting value for this URL
+        if weighting_value and weighting_value > 0 and len(gpturls) > 0:
+            calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
+            if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
+                print("Error - not enough tokens left for summary of URL content with weighting: " + URL, flush=True)
+                continue;
+            max_tokens_completion_summarize = calc_tokens
+            print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
+            if max_tokens_completion_summarize < 1:
+                max_tokens_completion_summarize = 1 # max_tokens may not be 0
+
+        #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
+        text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
+
+        #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
+        test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in list(searchresults.queue) if len(text) > 0])
+        sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
+        if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
+            print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
+            max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
+            if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+                print("Not enough tokens after decreasing, for: " + URL, flush=True)
+                continue # Not enough tokens
+        if max_tokens_completion_summarize < 1:
+            print("Error - no tokens left for summary of URL content: " + URL, flush=True)
+            continue
+        if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+            print("Error - not enough tokens left for summary of URL content: " + URL, flush=True)
+            continue
+        prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+
+        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
         if not responsemessage:
             return None # (Fatal) error in chatcompletion
-        weighting = extract_json(responsemessage, "weighting")
-
-        print("weighting content: " + json.dumps(weighting), flush=True)
-        print("search_google_result content: " + json.dumps(search_google_result), flush=True)
-        if weighting:
-            # the function returned a dictionary, re-sort
-            sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
-            gpturls = {}
-            for index, _ in sorted_weighting:
-                if int(index) > len(search_google_result['searchresults'])-1:
-                    break
-                gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
-        else:
-            # the function returned False, resume unaltered
-            print("No results of initial sort.", flush=True)
-
-        # Check for links in the original task
-        extractor = URLExtract()
-        urls = extractor.find_urls(usertask)
-        if len(urls) > 0:
-            # use a list comprehension to add https:// to each url if needed
-            urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
-            if google_result is None:
-                google_result = urls
-            else:
-                google_result[:0] = urls
-
-        # Check if the result is None
-        if google_result is None:
-            # The function has returned an error
-            print("There was an error in the search.", flush=True)
-            continue
-        # The function has returned a list of URLs
-        for URL in google_result:
-            percent = str(zaehler / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
-            writefile(percent, False, task_id)
-            zaehler = zaehler + 1
-            if URL in ALLURLS:
-                continue # Exists already
-            ALLURLS.append(URL)
-            print("Here are the URLs: " + URL, flush=True)
-            dlfile = extract_content(URL)
-            if not dlfile:
-                responsemessage = "Error"
-                print("Error summarizing URL content: " + URL, flush=True)
-                continue
-            responsemessage = dlfile
-
-            prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
-                    f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
-                    f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
-                    f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
-                    f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
-            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
-
-            #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
-
-            weighting_value = False
-            if gpturls:
-                if URL in gpturls.values():
-                    # Find the corresponding key in the gpturls dictionary
-                    key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
-                    # Get the weighting value for the key
-                    weighting_value = float(weighting[key])
-
-            max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
-
-            #Check if there's a weighting value for this URL
-            if weighting_value and weighting_value > 0 and len(gpturls) > 0:
-                calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
-                if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-                    print("Error - not enough tokens left for summary of URL content with weighting: " + URL, flush=True)
-                    continue;
-                max_tokens_completion_summarize = calc_tokens
-                print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
-                if max_tokens_completion_summarize < 1:
-                    max_tokens_completion_summarize = 1 # max_tokens may not be 0
-
-            #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-            text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
-
-            #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-            test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
-            sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
-            if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-                print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
-                max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
-                if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                    print("Not enough tokens after decreasing, for: " + URL, flush=True)
-                    continue # Not enough tokens
-            if max_tokens_completion_summarize < 1:
-                print("Error - no tokens left for summary of URL content: " + URL, flush=True)
-                continue
-            if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                print("Error - not enough tokens left for summary of URL content: " + URL, flush=True)
-                continue
-            prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
-
-            responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
-            if not responsemessage:
-                return None # (Fatal) error in chatcompletion
-            responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
-            #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-            #debug_output("Page content - result", responsemessage, system_prompt, 'a')
-            searchresults.append(f"{text_summary}{responsemessage}")
-    return searchresults
+        responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
+        #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+        #debug_output("Page content - result", responsemessage, system_prompt, 'a')
+        searchresults.put(f"{text_summary}{responsemessage}")
 
 def valid_keywords(keywords):
     if not keywords:
