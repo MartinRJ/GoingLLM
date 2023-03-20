@@ -47,6 +47,14 @@ TEMPERATURE_SELECT_SEARCHES = float(os.getenv('temperature_select_searches'))
 MAX_TOKENS_SELECT_SEARCHES_LENGTH = int(os.getenv('SELECT_SEARCHES_MAX_TOKEN_LENGTH'))
 BODY_MAX_LENGTH = int(os.getenv('BODY_MAX_LENGTH'))
 
+#SUCCESS/ERROR CODES
+FINAL_RESULT_CODE_ERROR_INPUT = "-700" # Error with input
+FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS = "-500" # Error in ChatCompletions API
+FINAL_RESULT_CODE_ERROR_CUSTOMSEARCH = "-400" # Error in Custom Search API
+FINAL_RESULT_CODE_ERROR_OTHER_CUSTOM = "-600" # Other Error - error message in final_result
+FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH = "100" # Success (ChatCompletions-only result)
+FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH = "200" # Success (successfully used Custom Search API)
+
 #BASIC AUTHENTICATION
 AUTH_UNAME = os.getenv('AUTH_UNAME')
 AUTH_PASS = os.getenv('AUTH_PASS')
@@ -75,7 +83,7 @@ def startup():
         task_id = str(uuid.uuid4())
         errormessage = "Input is too long."
         print(errormessage, flush=True)
-        writefile(100, errormessage, task_id)
+        writefile(FINAL_RESULT_CODE_ERROR_INPUT, errormessage, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
         return response
@@ -89,7 +97,7 @@ def startup():
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid.uuid4())
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
-        writefile(0, False, task_id)
+        writefile("0", False, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
         return response
@@ -138,205 +146,224 @@ def response_task(usertask, task_id, dogoogleoverride):
     # Preprocess user input
     usertask = preprocess_user_input(usertask)
 
-    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
-    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
-
-    ALLURLS = []
-
     dogooglesearch = should_perform_google_search(usertask, dogoogleoverride, task_id) #Should the tool do a google search?
 
-    has_result = False
     final_result = ""
-    if dogooglesearch:
+    final_result_code = ""
+    if dogooglesearch == None or not dogooglesearch:
+            if dogooglesearch == None:
+                print("Chatcompletions error in should_perform_google_search", flush=True)
+            else:
+                print("No Google search necessary. Generating final response without search results.", flush=True)
+            final_result, final_result_code = generate_final_result_without_search(usertask)
+    elif dogooglesearch:
+        print("With Google-search, generating keywords.", flush=True)
         keywords = generate_keywords(usertask, task_id)
-        ergebnis = False
-        if not keywords:
-            return # (Fatal) error in chatcompletion
-        elif all(isinstance(item, str) for item in keywords):
-            ergebnis = True
-        else:
-            ergebnis = False
-            print("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords), flush=True)
-        searchresults = []
-        zaehler = 0
-        if ergebnis:
-            for keyword in keywords:
-                search_google_result = search_google(keyword)
-                #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
-                google_result = None
-                if search_google_result is None: #Skip if nothing was found or there was an error in search
-                    continue
-                for search_result in search_google_result['searchresults']:
-                    for key in search_result:
-                        if not google_result is None:
-                            google_result.append(search_result[key]['url'])
-                        else:
-                            google_result = [search_result[key]['url']]
-                # Let ChatGPT pick the most promising
-                gpturls = False
-
-                prompt = f"Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
-                system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
-                #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
-                prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
-                #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
-                if not responsemessage:
-                    return # (Fatal) error in chatcompletion
-                weighting = extract_json(responsemessage, "weighting")
-
-                print("weighting content: " + json.dumps(weighting), flush=True)
-                print("search_google_result content: " + json.dumps(search_google_result), flush=True)
-                if weighting:
-                    # the function returned a dictionary, re-sort
-                    sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
-                    gpturls = {}
-                    for index, _ in sorted_weighting:
-                        if int(index) > len(search_google_result['searchresults'])-1:
-                            break
-                        gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
+        if keywords == None or not keywords:
+            if keywords == None:
+                print("Chatcompletions error in generate_keywords", flush=True)
+            else:
+                print("No search terms. Generating final response without search results.", flush=True)
+            final_result, final_result_code = generate_final_result_without_search(usertask)
+        elif valid_keywords(keywords):
+            print("Keywords are valid, starting search.", flush=True)
+            searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+            if searchresults == None or not searchresults:
+                if searchresults == None:
+                    print("Chatcompletions error in process_keywords_and_search", flush=True)
                 else:
-                    # the function returned False, resume unaltered
-                    print("No results of initial sort.", flush=True)
-
-                # Check for links in the original task
-                extractor = URLExtract()
-                urls = extractor.find_urls(usertask)
-                if len(urls) > 0:
-                    # use a list comprehension to add https:// to each url if needed
-                    urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
-                    if google_result is None:
-                        google_result = urls
-                    else:
-                        google_result[:0] = urls
-
-                # Check if the result is None
-                if google_result is None:
-                    # The function has returned an error
-                    print("There was an error in the search.", flush=True)
-                    continue
-                # The function has returned a list of URLs
-                for URL in google_result:
-                    percent = str(zaehler / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
-                    writefile(percent, False, task_id)
-                    zaehler = zaehler + 1
-                    if URL in ALLURLS:
-                        continue # Exists already
-                    ALLURLS.append(URL)
-                    print("Here are the URLs: " + URL, flush=True)
-                    dlfile = extract_content(URL)
-                    if not dlfile:
-                        responsemessage = "Error"
-                        print("Error summarizing URL content: " + URL, flush=True)
-                        continue
-                    responsemessage = dlfile
-
-                    prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
-                            f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
-                            f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
-                            f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
-                            f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
-
-                    #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
-
-                    weighting_value = False
-                    if gpturls:
-                        if URL in gpturls.values():
-                            # Find the corresponding key in the gpturls dictionary
-                            key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
-                            # Get the weighting value for the key
-                            weighting_value = float(weighting[key])
-
-                    max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
-
-                    #Check if there's a weighting value for this URL
-                    if weighting_value and weighting_value > 0 and len(gpturls) > 0:
-                        calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
-                        if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-                            print("Error - not enough tokens left for summary of URL content with weighting: " + URL, flush=True)
-                            continue;
-                        max_tokens_completion_summarize = calc_tokens
-                        print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
-                        if max_tokens_completion_summarize < 1:
-                            max_tokens_completion_summarize = 1 # max_tokens may not be 0
-
-                    #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-                    text_summary = "\nZusammenfassung der Ergebnisse von \"{}\": "
-                    formatted_text_summary = text_summary.format(URL)
-
-                    #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-                    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
-                    sum_results = calculate_tokens(f"{test_finalquery}{formatted_text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
-                    if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-                        print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
-                        max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
-                        if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                            print("Not enough tokens after decreasing, for: " + URL, flush=True)
-                            continue # Not enough tokens
-                    if max_tokens_completion_summarize < 1:
-                        print("Error - no tokens left for summary of URL content: " + URL, flush=True)
-                        continue
-                    if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                        print("Error - not enough tokens left for summary of URL content: " + URL, flush=True)
-                        continue
-                    prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
-
-                    responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
-                    if not responsemessage:
-                        return # (Fatal) error in chatcompletion
-                    responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
-                    #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
-                    #debug_output("Page content - result", responsemessage, system_prompt, 'a')
-                    searchresults.append(f"{formatted_text_summary}{responsemessage}")
-
-                    has_result = True
+                    print("Searchresults are empty. Generating final response without search results.", flush=True)
+                final_result, final_result_code = generate_final_result_without_search(usertask)
+            else:
+                print("Got search results, generating final results.", flush=True)
+                final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+                if final_result == None:
+                    print("Chatcompletions error in generate_final_response_with_search_results", flush=True)
+                    final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
+                else:
+                    print("Success with search results", flush=True)
+                    final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
-            #no search terms
-            has_result = False
-            print("No search terms.", flush=True)
-
-
-        finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
-        # Check if there is any text
-        has_text = len(searchresults) > 0
-
-        if has_text:
-            print("Final result found, making final query.", flush=True)
-
-            #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
-            finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
-            finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
-            final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
-            if not final_result:
-                return # (Fatal) error in chatcompletion
-
-            #debug_output("final query", finalquery, system_prompt, 'a') #----Debug Output
-            has_result = True
-        else:
-            has_result = False
-            print("No search results.", flush=True)
-    else:
-        has_result = False
-        print("GPT thinks, no search is required. Response to 'Is search required?' was: " + responsemessage, flush=True)
-
-    if not has_result:
-        print("Nothing found, making a regular query.", flush=True)
-        #Make a regular query
-        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
-        usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
-        final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
-        if not final_result:
-            return # (Fatal) error in chatcompletion
-        #final_result = escape_result(final_result)
+            print("Keywords are not valid. Generating final response without search results.", flush=True)
+            final_result, final_result_code = generate_final_result_without_search(usertask)
 
     #html = markdown.markdown(responsemessage)
-    writefile(100, final_result, task_id)
+    writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
 
+def generate_final_result_without_search(usertask, task_id):
+    #Perform and evaluate final regular request (without searchresults)
+    final_result = generate_final_response_without_search_results(usertask, task_id)
+    if final_result == None:
+        print("Chatcompletions error in generate_final_response_without_search_results", flush=True)
+        final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
+    else:
+        print("Success without search results", flush=True)
+        final_result_code = FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH
+    return final_result, final_result_code
 
+def generate_final_response_without_search_results(usertask, task_id):
+    #Make a regular query
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+    usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
+    final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    return final_result
 
- 
+def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
+    finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+    #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
+    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
+    finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
+    final_result = chatcompletion(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    return final_result
+
+def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+    ALLURLS = []
+    searchresults = []
+    zaehler = 0
+    for keyword in keywords:
+        search_google_result = search_google(keyword)
+        #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
+        google_result = None
+        if search_google_result is None: #Skip if nothing was found or there was an error in search
+            continue
+        for search_result in search_google_result['searchresults']:
+            for key in search_result:
+                if not google_result is None:
+                    google_result.append(search_result[key]['url'])
+                else:
+                    google_result = [search_result[key]['url']]
+        # Let ChatGPT pick the most promising
+        gpturls = False
+
+        prompt = f"Bitte wähle die Reihenfolge der vielverprechendsten Google-Suchen aus der folgenden Liste aus die für dich zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
+        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
+        #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
+        prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
+        #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+        responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+        if not responsemessage:
+            return None # (Fatal) error in chatcompletion
+        weighting = extract_json(responsemessage, "weighting")
+
+        print("weighting content: " + json.dumps(weighting), flush=True)
+        print("search_google_result content: " + json.dumps(search_google_result), flush=True)
+        if weighting:
+            # the function returned a dictionary, re-sort
+            sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
+            gpturls = {}
+            for index, _ in sorted_weighting:
+                if int(index) > len(search_google_result['searchresults'])-1:
+                    break
+                gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
+        else:
+            # the function returned False, resume unaltered
+            print("No results of initial sort.", flush=True)
+
+        # Check for links in the original task
+        extractor = URLExtract()
+        urls = extractor.find_urls(usertask)
+        if len(urls) > 0:
+            # use a list comprehension to add https:// to each url if needed
+            urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
+            if google_result is None:
+                google_result = urls
+            else:
+                google_result[:0] = urls
+
+        # Check if the result is None
+        if google_result is None:
+            # The function has returned an error
+            print("There was an error in the search.", flush=True)
+            continue
+        # The function has returned a list of URLs
+        for URL in google_result:
+            percent = str(zaehler / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            writefile(percent, False, task_id)
+            zaehler = zaehler + 1
+            if URL in ALLURLS:
+                continue # Exists already
+            ALLURLS.append(URL)
+            print("Here are the URLs: " + URL, flush=True)
+            dlfile = extract_content(URL)
+            if not dlfile:
+                responsemessage = "Error"
+                print("Error summarizing URL content: " + URL, flush=True)
+                continue
+            responsemessage = dlfile
+
+            prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
+                    f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
+                    f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
+                    f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
+                    f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
+            system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
+
+            #debug_output("Page content - untruncated", prompt, system_prompt, 'w') #----Debug Output
+
+            weighting_value = False
+            if gpturls:
+                if URL in gpturls.values():
+                    # Find the corresponding key in the gpturls dictionary
+                    key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
+                    # Get the weighting value for the key
+                    weighting_value = float(weighting[key])
+
+            max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
+
+            #Check if there's a weighting value for this URL
+            if weighting_value and weighting_value > 0 and len(gpturls) > 0:
+                calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
+                if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
+                    print("Error - not enough tokens left for summary of URL content with weighting: " + URL, flush=True)
+                    continue;
+                max_tokens_completion_summarize = calc_tokens
+                print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
+                if max_tokens_completion_summarize < 1:
+                    max_tokens_completion_summarize = 1 # max_tokens may not be 0
+
+            #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
+            text_summary = "\nZusammenfassung der Ergebnisse von \"{}\": "
+            formatted_text_summary = text_summary.format(URL)
+
+            #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
+            test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+            sum_results = calculate_tokens(f"{test_finalquery}{formatted_text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
+            if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
+                print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
+                max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
+                if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+                    print("Not enough tokens after decreasing, for: " + URL, flush=True)
+                    continue # Not enough tokens
+            if max_tokens_completion_summarize < 1:
+                print("Error - no tokens left for summary of URL content: " + URL, flush=True)
+                continue
+            if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+                print("Error - not enough tokens left for summary of URL content: " + URL, flush=True)
+                continue
+            prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+
+            responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
+            if not responsemessage:
+                return None # (Fatal) error in chatcompletion
+            responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
+            #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
+            #debug_output("Page content - result", responsemessage, system_prompt, 'a')
+            searchresults.append(f"{formatted_text_summary}{responsemessage}")
+    return searchresults
+
+def valid_keywords(keywords):
+    if not keywords:
+        print("valid_keywords: (Fatal) error in chat completion", flush=True)
+        return False # (Fatal) error in chatcompletion
+    elif all(isinstance(item, str) for item in keywords):
+        return True
+    else:
+        print("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords), flush=True)
+        return False
 
 def generate_keywords(usertask, task_id):
     number_keywords = num2words(NUMBER_OF_KEYWORDS, lang='de')
@@ -350,14 +377,13 @@ def generate_keywords(usertask, task_id):
     responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
     
     if not responsemessage:
-        return False # (Fatal) error in chatcompletion
+        return None # (Fatal) error in chatcompletion
 
     # Attempt to extract the JSON object from the response
     jsonobject = extract_json(responsemessage, "keywords")
     keywords = jsonobject if jsonobject else [False]
 
     return keywords
-
 
 def should_perform_google_search(usertask, dogoogleoverride, task_id):
     #The user can omit the part, where this tool asks Assistant whether it requires a google search for the task
@@ -377,6 +403,8 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     system_prompt = f"Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
     responsemessage = chatcompletion(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
+    if not responsemessage:
+        return None # (Fatal) error in chatcompletion
     print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
     dogooglesearch = yes_or_no(responsemessage)
     return dogooglesearch
@@ -403,7 +431,7 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
     except Exception as e:
         Errormessage = "Error occured in chatcompletion: {e}"
         print(Errormessage, flush=True)
-        writefile(100, Errormessage, task_id)
+        writefile("100", Errormessage, task_id)
         return False
     
 
