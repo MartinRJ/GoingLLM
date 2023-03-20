@@ -143,6 +143,8 @@ def writefile(progress, json_data, task_id):
 
 
 def response_task(usertask, task_id, dogoogleoverride):
+    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
+    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
     # Preprocess user input
     usertask = preprocess_user_input(usertask)
 
@@ -205,14 +207,12 @@ def generate_final_result_without_search(usertask, task_id):
 
 def generate_final_response_without_search_results(usertask, task_id):
     #Make a regular query
-    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche"
+    system_prompt = "Ich bin dein persönlicher Assistent"
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
     final_result = chatcompletion(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
-    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
     finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
     #debug_output("final query - untruncated", finalquery, system_prompt, 'w') #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
