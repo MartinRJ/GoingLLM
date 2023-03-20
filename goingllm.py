@@ -157,7 +157,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("Chatcompletions error in should_perform_google_search", flush=True)
             else:
                 print("No Google search necessary. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
     elif dogooglesearch:
         print("With Google-search, generating keywords.", flush=True)
         keywords = generate_keywords(usertask, task_id)
@@ -166,7 +166,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 print("Chatcompletions error in generate_keywords", flush=True)
             else:
                 print("No search terms. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
         elif valid_keywords(keywords):
             print("Keywords are valid, starting search.", flush=True)
             searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
@@ -175,7 +175,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     print("Chatcompletions error in process_keywords_and_search", flush=True)
                 else:
                     print("Searchresults are empty. Generating final response without search results.", flush=True)
-                final_result, final_result_code = generate_final_result_without_search(usertask)
+                final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
             else:
                 print("Got search results, generating final results.", flush=True)
                 final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
@@ -187,7 +187,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
             print("Keywords are not valid. Generating final response without search results.", flush=True)
-            final_result, final_result_code = generate_final_result_without_search(usertask)
+            final_result, final_result_code = generate_final_result_without_search(usertask, task_id)
 
     #html = markdown.markdown(responsemessage)
     writefile(final_result_code, final_result, task_id)
