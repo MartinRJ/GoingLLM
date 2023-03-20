@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import chardet
 import concurrent.futures
 from datetime import datetime
-from flask import Flask, request, make_response, send_from_directory
+from flask import Flask, request, make_response, send_file, send_from_directory
 import gc
 from googleapiclient.discovery import build
 from io import BytesIO
@@ -117,6 +117,13 @@ def index():
 @app.route('/<path:path>')
 def static_files(path):
     return send_from_directory(os.path.join(app.root_path, 'static'), path)
+
+@app.route('/tmp/log.txt')
+def serve_log_file():
+    try:
+        return send_file('tmp/log.txt', as_attachment=True, attachment_filename='log.txt')
+    except Exception as e:
+        return str(e)
 
 def writefile(progress, json_data, task_id):
     data = {}
@@ -919,7 +926,7 @@ def debuglog(text, create=False):
             # write text to file
             f.writelines([text, "\n--------------------\n"])
     except Exception as e:
-        print("Error debuglog: could not write to file", flush=True)
+        print(f"Error debuglog: could not write to file: {e}", flush=True)
 
 if __name__ == "__main__":
     app.run()
