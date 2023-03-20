@@ -26,7 +26,6 @@ import spacy
 import threading
 import tiktoken
 import time
-import traceback
 from urlextract import URLExtract
 import uuid
 app = Flask(__name__)
@@ -262,12 +261,9 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
         
         for process in processes:
             process.join()
-
-    try:
-        return list(searchresults)
-    except Exception as e:
-        debuglog(f"An error occurred while converting search results to list: {e}")
-        return None
+        # Convert searchresults to a regular list inside the with block
+        searchresults_list = list(searchresults)
+    return searchresults_list
 
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
@@ -943,7 +939,6 @@ def debuglog(text, create=False):
             f.writelines([text, "\n--------------------\n"])
     except Exception as e:
         print(f"Error debuglog: could not write to file: {e}", flush=True)
-        traceback.print_exc()
 
 if __name__ == "__main__":
     app.run()
