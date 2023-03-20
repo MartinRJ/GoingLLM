@@ -928,7 +928,7 @@ def debuglog(text, create=False):
     try:
         writemode = 'a'
         if create:
-            mode = 'w' #Overwrite
+            writemode = 'w' #Overwrite
         # create a 'tmp' directory if it does not exist
         if not os.path.exists('tmp'):
             os.makedirs('tmp')
