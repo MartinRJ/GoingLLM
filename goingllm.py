@@ -326,12 +326,11 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
                     max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
             #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-            text_summary = f"\nZusammenfassung der Ergebnisse von \"{}\": "
-            formatted_text_summary = text_summary.format(URL)
+            text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
 
             #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
             test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
-            sum_results = calculate_tokens(f"{test_finalquery}{formatted_text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
+            sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
             if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
                 print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
                 max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
@@ -352,7 +351,7 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
             responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
             #debug_output("Page content", prompt, system_prompt, 'a') #----Debug Output
             #debug_output("Page content - result", responsemessage, system_prompt, 'a')
-            searchresults.append(f"{formatted_text_summary}{responsemessage}")
+            searchresults.append(f"{text_summary}{responsemessage}")
     return searchresults
 
 def valid_keywords(keywords):
