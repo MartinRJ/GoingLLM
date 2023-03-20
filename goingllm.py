@@ -79,13 +79,13 @@ def startup():
         if not body:
             raise ValueError('Empty body')
     except Exception as e:
-        print("There was an error with the input.", flush=True)
+        debuglog("There was an error with the input.")
         return f'Error extracting body: {e}', 400
 
     if len(body) > BODY_MAX_LENGTH:
         task_id = str(uuid.uuid4())
         errormessage = "Input is too long."
-        print(errormessage, flush=True)
+        debuglog(errormessage)
         writefile(FINAL_RESULT_CODE_ERROR_INPUT, errormessage, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
@@ -99,6 +99,7 @@ def startup():
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid.uuid4())
+        debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile("0", False, task_id)
         response = make_response('', 200)
@@ -137,13 +138,12 @@ def writefile(progress, json_data, task_id):
         # set the file path
         file_path = f'searches/{task_id}.json'
         # open file in write mode
-        print("Writing to /" + file_path, flush=True)
+        debuglog("Writing to /" + file_path)
         with open(file_path, 'w') as f:
             # write JSON data to file
             f.write(json.dumps(data))
     except Exception as e:
-        print("Could not write file", flush=True)
-
+        debuglog("Could not write file")
 
 def response_task(usertask, task_id, dogoogleoverride):
     PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
@@ -157,39 +157,39 @@ def response_task(usertask, task_id, dogoogleoverride):
     final_result_code = ""
     if dogooglesearch == None or not dogooglesearch:
             if dogooglesearch == None:
-                print("Chatcompletions error in should_perform_google_search", flush=True)
+                debuglog("Chatcompletions error in should_perform_google_search")
             else:
-                print("No Google search necessary. Generating final response without search results.", flush=True)
+                debuglog("No Google search necessary. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, False)
     elif dogooglesearch:
-        print("With Google-search, generating keywords.", flush=True)
+        debuglog("With Google-search, generating keywords.")
         keywords = generate_keywords(usertask, task_id)
         if keywords == None or not keywords:
             if keywords == None:
-                print("Chatcompletions error in generate_keywords", flush=True)
+                debuglog("Chatcompletions error in generate_keywords")
             else:
-                print("No search terms. Generating final response without search results.", flush=True)
+                debuglog("No search terms. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
         elif valid_keywords(keywords):
-            print("Keywords are valid, starting search.", flush=True)
+            debuglog("Keywords are valid, starting search.")
             searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
             if searchresults == None or not searchresults:
                 if searchresults == None:
-                    print("Chatcompletions error in process_keywords_and_search", flush=True)
+                    debuglog("Chatcompletions error in process_keywords_and_search")
                 else:
-                    print("Searchresults are empty. Generating final response without search results.", flush=True)
+                    debuglog("Searchresults are empty. Generating final response without search results.")
                 final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
             else:
-                print("Got search results, generating final results.", flush=True)
+                debuglog("Got search results, generating final results.")
                 final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
                 if final_result == None:
-                    print("Chatcompletions error in generate_final_response_with_search_results", flush=True)
+                    debuglog("Chatcompletions error in generate_final_response_with_search_results")
                     final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
                 else:
-                    print("Success with search results", flush=True)
+                    debuglog("Success with search results")
                     final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
-            print("Keywords are not valid. Generating final response without search results.", flush=True)
+            debuglog("Keywords are not valid. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
 
     #html = markdown.markdown(responsemessage)
@@ -201,10 +201,10 @@ def generate_final_result_without_search(usertask, task_id, regular):
     #Perform and evaluate final regular request (without searchresults). 'regular' determines whether this was called due to an error (regular=False).
     final_result = generate_final_response_without_search_results(usertask, task_id, regular)
     if final_result == None:
-        print("Chatcompletions error in generate_final_response_without_search_results", flush=True)
+        debuglog("Chatcompletions error in generate_final_response_without_search_results")
         final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
     else:
-        print("Success without search results", flush=True)
+        debuglog("Success without search results")
         final_result_code = FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH
     return final_result, final_result_code
 
@@ -245,12 +245,12 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
     try:
         return list(searchresults)
     except Exception as e:
-        print(f"An error occurred while converting search results to list: {e}")
+        debuglog(f"An error occurred while converting search results to list: {e}")
         return None
 
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
-    #print("Search Google result contains the following data: " + json.dumps(search_google_result), flush=True) #debug
+    debuglog("Search Google result contains the following data: " + json.dumps(search_google_result)) #debug
     google_result = None
     if search_google_result is None: #Skip if nothing was found or there was an error in search
         return
@@ -273,8 +273,8 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         return None # (Fatal) error in chatcompletion
     weighting = extract_json(responsemessage, "weighting")
 
-    print("weighting content: " + json.dumps(weighting), flush=True)
-    print("search_google_result content: " + json.dumps(search_google_result), flush=True)
+    debuglog("weighting content: " + json.dumps(weighting))
+    debuglog("search_google_result content: " + json.dumps(search_google_result))
     if weighting:
         # the function returned a dictionary, re-sort
         sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
@@ -285,7 +285,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
             gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
     else:
         # the function returned False, resume unaltered
-        print("No results of initial sort.", flush=True)
+        debuglog("No results of initial sort.")
 
     # Check for links in the original task
     extractor = URLExtract()
@@ -301,7 +301,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     # Check if the result is None
     if google_result is None:
         # The function has returned an error
-        print("There was an error in the search.", flush=True)
+        debuglog("There was an error in the search.")
         return
     # The function has returned a list of URLs
     for URL in google_result:
@@ -321,11 +321,11 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         if exists_in_queue:
             continue  # Exists already
 
-        print("Here are the URLs: " + URL, flush=True)
+        debuglog("Here are the URLs: " + URL)
         dlfile = extract_content(URL)
         if not dlfile:
             responsemessage = "Error"
-            print("Error summarizing URL content: " + URL, flush=True)
+            debuglog("Error summarizing URL content: " + URL)
             continue
         responsemessage = dlfile
 
@@ -352,10 +352,10 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         if weighting_value and weighting_value > 0 and len(gpturls) > 0:
             calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
             if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-                print("Error - not enough tokens left for summary of URL content with weighting: " + URL, flush=True)
+                debuglog("Error - not enough tokens left for summary of URL content with weighting: " + URL)
                 continue;
             max_tokens_completion_summarize = calc_tokens
-            print("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens", flush=True)
+            debuglog("Weighting applied: " + str(weighting_value) + " weight => " + str(max_tokens_completion_summarize) + " tokens")
             if max_tokens_completion_summarize < 1:
                 max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
@@ -366,16 +366,16 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
         sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
         if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-            print("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize), flush=True)
+            debuglog("Decreasing tokens for summary for: " + URL + ", not enough tokens left: " + str(MODEL_MAX_TOKEN - sum_results) + ", requested were " + str(max_tokens_completion_summarize))
             max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
             if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                print("Not enough tokens after decreasing, for: " + URL, flush=True)
+                debuglog("Not enough tokens after decreasing, for: " + URL)
                 continue # Not enough tokens
         if max_tokens_completion_summarize < 1:
-            print("Error - no tokens left for summary of URL content: " + URL, flush=True)
+            debuglog("Error - no tokens left for summary of URL content: " + URL)
             continue
         if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-            print("Error - not enough tokens left for summary of URL content: " + URL, flush=True)
+            debuglog("Error - not enough tokens left for summary of URL content: " + URL)
             continue
         prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
@@ -389,12 +389,12 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
 def valid_keywords(keywords):
     if not keywords:
-        print("valid_keywords: (Fatal) error in chat completion", flush=True)
+        debuglog("valid_keywords: (Fatal) error in chat completion")
         return False # (Fatal) error in chatcompletion
     elif all(isinstance(item, str) for item in keywords):
         return True
     else:
-        print("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords), flush=True)
+        debuglog("Not all entries in the keyword-array are strings. Cannot use the results: " + json.dumps(keywords))
         return False
 
 def generate_keywords(usertask, task_id):
@@ -437,7 +437,7 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
-    print("Does ChatGPT require a Google-Search: " + responsemessage, flush=True)
+    debuglog("Does ChatGPT require a Google-Search: " + responsemessage)
     dogooglesearch = yes_or_no(responsemessage)
     return dogooglesearch
 
@@ -458,27 +458,27 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
                 {"role": "user", "content": prompt}
             ]
         )
-        print("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt, flush=True)
+        debuglog("Query completed. Usage = prompt_tokens: " + str(response['usage']['prompt_tokens']) + ", completion_tokens: " + str(response['usage']['completion_tokens']) + ", total_tokens: " + str(response['usage']['total_tokens']) + "\n\nPrompt:\n" + prompt)
         return response['choices'][0]['message']['content']
     except Exception as e:
         Errormessage = f"Error occured in chatcompletion: {e}"
-        print(Errormessage, flush=True)
+        debuglog(Errormessage)
         return False
 
 def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens, task_id)
-        
+
         try:
             response = future.result(timeout)
             return response
         except concurrent.futures.TimeoutError:
             Errormessage = f"Error: chatcompletion timed out after {timeout} seconds"
-            print(Errormessage, flush=True)
+            debuglog(Errormessage)
             return False
         except Exception as e:
             Errormessage = f"Error occured in chatcompletion_with_timeout: {e}"
-            print(Errormessage, flush=True)
+            debuglog(Errormessage)
             return False
 
 def debug_output(note, string, system_prompt, mode):
@@ -493,13 +493,13 @@ def debug_output(note, string, system_prompt, mode):
         # set the file path
         file_path = f'searches/temp.json'
         # open file in write mode
-        print("Writing debug output to /" + file_path, flush=True)
+        debuglog("Writing debug output to /" + file_path)
         with open(file_path, mode) as f:
             # write JSON data to file
             f.write(note + "\n")
             json.dump(messages, f)
     except Exception as e:
-        print("Could not write file", flush=True)
+        debuglog("Could not write file")
 
 def truncate_at_last_period_or_newline(text):
     language = detect(text) # Detect the language of the text
@@ -524,11 +524,11 @@ def truncate_at_last_period_or_newline(text):
             nlp = spacy.load(model_name) # Load the model
         except:
             try:
-                print("Model not downloaded, downloading " + model_name, flush=True)
+                debuglog("Model not downloaded, downloading " + model_name)
                 spacy.cli.download(model_name) # download the models automatically if they are not present
                 nlp = spacy.load(model_name) # Load the model
             except:
-                print("Could not download and load model " + model_name, flush=True)
+                debuglog("Could not download and load model " + model_name)
                 return truncate_legacy(text)
 
         try:
@@ -538,11 +538,11 @@ def truncate_at_last_period_or_newline(text):
             truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
             return text[:truncate_index] # Cut the text at this index
         except Exception as e:
-            print("Could not load language. Error: {e}", flush=True)
+            debuglog("Could not load language. Error: {e}")
             # Fallback to the legacy method
             return truncate_legacy(text)
     else:
-        print("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
+        debuglog("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
         #Use the 'legacy' method, of cutting off at the last period or newline character.
         return truncate_legacy(text)
 
@@ -578,7 +578,7 @@ def extract_json(stringwithjson, objectname):
 
     #find the JSON object
     if start == -1 or end == 0:
-        print("Error: JSON object not found", flush=True)
+        debuglog("Error: JSON object not found")
         return False
 
     json_string = stringwithjson[start:end]
@@ -589,7 +589,7 @@ def extract_json(stringwithjson, objectname):
         json_string = re.sub(r'\"(\d+)\":', lambda match: '"' + str(match.group(1)) + '":', json_string)
         data = json.loads(json_string)
     except ValueError as e:
-        print("Error: Malformed JSON object: " + stringwithjson, flush=True)
+        debuglog("Error: Malformed JSON object: " + stringwithjson)
         return False
 
     items = []
@@ -597,7 +597,7 @@ def extract_json(stringwithjson, objectname):
     if objectname in data:
         items = data[objectname]
     else:
-        print("Error: JSON object doesn't contain '" + objectname + "' array: " + stringwithjson, flush=True)
+        debuglog("Error: JSON object doesn't contain '" + objectname + "' array: " + stringwithjson)
         return False
 
     #return the result
@@ -616,7 +616,7 @@ def calculate_tokens(string, system_prompt):
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
-        print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
+        debuglog("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.")
 
     if system_prompt:
         messages = [
@@ -643,7 +643,7 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
-        print("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.", flush=True)
+        debuglog("Error using \"" + MODEL + "\" as encoding model in truncation, falling back to cl100k_base.")
 
     messages = [
     {"role": "system", "content": system_prompt},
@@ -661,13 +661,13 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
     system_tokens = len(enc.encode(system_prompt))
     possible_tokens = MODEL_MAX_TOKEN - max_tokens - system_tokens - base_tokens
     if (num_tokens > possible_tokens):
-        print("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens), flush=True)
+        debuglog("Length: " + str(num_tokens) + " tokens. Too long, truncating to " + str(possible_tokens))
         tokens = enc.encode(string)
         truncated_tokens = tokens[:possible_tokens] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
-        print("Length: " + str(num_tokens) + " tokens. Resuming.", flush=True)
+        debuglog("Length: " + str(num_tokens) + " tokens. Resuming.")
         return string
 
 def yes_or_no(string):
@@ -713,10 +713,10 @@ def search_google(query):
             return results
         else:
             # There were no search results for this query
-            print("No search results for this query.", flush=True)
+            debuglog("No search results for this query.")
             return None
     except Exception as e:
-        print(f"Error in Google API query: {e}", Flush=True)
+        debuglog(f"Error in Google API query: {e}")
         return None
 
 def load_url_text(url):
@@ -734,10 +734,10 @@ def load_url_text(url):
             else:
                 return False
     except requests.exceptions.Timeout:
-        print("Request timed out", flush=True)
+        debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}", flush=True)
+        debuglog(f"Request error: {e}")
         return False
 
 def load_url_content(url):
@@ -755,10 +755,10 @@ def load_url_content(url):
             else:
                 return False
     except requests.exceptions.Timeout:
-        print("Request timed out", flush=True)
+        debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}", flush=True)
+        debuglog(f"Request error: {e}")
         return False
 
 def replace_newlines(text):
@@ -772,10 +772,10 @@ def extract_content(url):
         with requests.head(url, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
     except requests.exceptions.Timeout:
-        print("Request timed out", flush=True)
+        debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        print(f"Request error: {e}", flush=True)
+        debuglog(f"Request error: {e}")
         return False
     else:
         # process response
@@ -784,7 +784,7 @@ def extract_content(url):
         try:
             # Check the status code of the response
             if mimetype is None:
-                print("Could not determine mimetype for URL:" + url, flush=True)
+                debuglog("Could not determine mimetype for URL:" + url)
                 mimetype = response.headers.get("content-type")
 
             if status_code == 200:
@@ -801,7 +801,7 @@ def extract_content(url):
                                 extract_text_to_fp(filecontent, outfp, laparams=LAParams())
                                 text = outfp.getvalue().decode('utf-8')
                                 text = replace_newlines(text)
-                                print("downloaded pdf file: " + text[:300], flush=True) #debug
+                                debuglog("downloaded pdf file: " + text[:300]) #debug
                                 return text[:MAX_FILE_CONTENT]
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
@@ -810,7 +810,7 @@ def extract_content(url):
                         # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
                         html = process_html_content(soup)
-                        print("downloaded html file: " + html[:300], flush=True) #debug
+                        debuglog("downloaded html file: " + html[:300]) #debug
                         return html
                     else:
                         return False
@@ -819,7 +819,7 @@ def extract_content(url):
                     if filecontent:
                         # Process plain text content
                         filecontent = replace_newlines(filecontent)
-                        print("downloaded plaintext file: " + filecontent[:300], flush=True) #debug
+                        debuglog("downloaded plaintext file: " + filecontent[:300]) #debug
                         return filecontent[:MAX_FILE_CONTENT]
                     else:
                         return False
@@ -829,7 +829,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_excel_content(filecontent)
                         if text:
-                            print("downloaded excel file: " + text[:300], flush=True) #debug
+                            debuglog("downloaded excel file: " + text[:300]) #debug
                             return text
                         else:
                             return False
@@ -841,7 +841,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_csv_content(filecontent)
                         if text:
-                            print("downloaded csv file: " + text[:300], flush=True) #debug
+                            debuglog("downloaded csv file: " + text[:300]) #debug
                             return text
                         else:
                             return False
@@ -853,7 +853,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_ppt_content(filecontent)
                         if text:
-                            print("downloaded powerpoint file: " + text[:300], flush=True) #debug
+                            debuglog("downloaded powerpoint file: " + text[:300]) #debug
                             return text
                         else:
                             return False
@@ -861,15 +861,15 @@ def extract_content(url):
                         return False
                 else:
                     # The content type is not supported
-                    print(f"Content type '{mimetype}' not supported", flush=True)
+                    debuglog(f"Content type '{mimetype}' not supported")
                     return False
             else:
                 # The URL could not be found or there was another error
-                print(f"Error retrieving URL: {status_code}", flush=True)
+                debuglog(f"Error retrieving URL: {status_code}")
                 return False
         except Exception as e:
             # There was another error
-            print(f"Error retrieving URL: {e}", flush=True)
+            debuglog(f"Error retrieving URL: {e}")
             return False
 
 def process_excel_content(filecontent):
@@ -881,7 +881,7 @@ def process_excel_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        print(f"Error processing Excel content: {e}", flush=True)
+        debuglog(f"Error processing Excel content: {e}")
         return False
 
 def process_csv_content(filecontent):
@@ -895,7 +895,7 @@ def process_csv_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        print(f"Error processing CSV content: {e}", flush=True)
+        debuglog(f"Error processing CSV content: {e}")
         return False
 
 def process_ppt_content(filecontent):
@@ -913,7 +913,7 @@ def process_ppt_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        print(f"Error processing PowerPoint content: {e}", flush=True)
+        debuglog(f"Error processing PowerPoint content: {e}")
         return False
 
 def process_html_content(soup):
@@ -923,6 +923,24 @@ def process_html_content(soup):
     html = body.get_text()
     html = replace_newlines(html)
     return html[:MAX_FILE_CONTENT]
+
+def debuglog(text, create=False):
+    try:
+        writemode = 'a'
+        if create:
+            mode = 'w' #Overwrite
+        # create a 'tmp' directory if it does not exist
+        if not os.path.exists('tmp'):
+            os.makedirs('tmp')
+        # set the file path
+        file_path = f'log.txt'
+        # open file in write mode
+        debuglog("Writing to /" + file_path)
+        with open(file_path, writemode) as f:
+            # write text to file
+            f.writelines([text, "\n--------------------\n"])
+    except Exception as e:
+        print("Error debuglog: could not write to file", flush=True)
 
 if __name__ == "__main__":
     app.run()
