@@ -329,6 +329,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
     debuglog(f"weighting content: {json.dumps(weighting)}")
     debuglog(f"search_google_result content: {json.dumps(search_google_result)}")
+    debuglog(f"google_result content: {json.dumps(google_result)}")
     if weighting:
         # the function returned a dictionary, re-sort
         sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
