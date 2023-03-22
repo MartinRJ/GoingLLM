@@ -279,7 +279,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
 
         for url in urls:
-            debuglog(f"URL detected in original request: {url)}") #debug
+            debuglog(f"URL detected in original request: {url}") #debug
             url_exists = False
 
             # Add the URL to google_result if it doesn't already exist
