@@ -311,8 +311,11 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         return
     for search_result in search_google_result['searchresults']:
         for key in search_result:
-            debuglog(f"Adding to google_result: {search_result[key]['url']}")
-            google_result.append(search_result[key]['url'])
+            url = search_result[key]['url']
+            debuglog(f"Adding to google_result: {url}")
+            # Add the URL to google_result if it doesn't already exist
+            if url not in google_result:
+                google_result.append(url)
 
     # Let ChatGPT pick the most promising
     gpturls = False
@@ -759,7 +762,7 @@ def load_url_text(url):
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error ind load_url_text: {e}")
         return False
 
 def load_url_content(url):
@@ -780,7 +783,7 @@ def load_url_content(url):
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error in load_url_content: {e}")
         return False
 
 def replace_newlines(text):
@@ -797,7 +800,7 @@ def extract_content(url):
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error in extract_content: {e}")
         return False
     else:
         # process response
