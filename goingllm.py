@@ -691,6 +691,7 @@ def yes_or_no(string):
 def search_google(query):
     # Initialise the API with your key and search engine
     service = build("customsearch", "v1", developerKey=CUSTOMSEARCH_KEY)
+    debuglog(f"Google search for: \"{query}\"")
     cse = service.cse()
     try:
         # Make a search request to the API
