@@ -303,7 +303,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                         "description": "This URL was provided with the original user prompt."
                     }
                 }
-                search_google_result.append(new_entry)
+                search_google_result["searchresults"].append(new_entry)
 
     if len(search_google_result) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
