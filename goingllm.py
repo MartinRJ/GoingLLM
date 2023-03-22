@@ -268,6 +268,8 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
     debuglog(f"Search Google result contains the following data: {json.dumps(search_google_result)}") #debug
+    if search_google_result is None:
+        search_google_result = {"searchresults":[]} # Create a new empty list, if it was empty.
 
     google_result = []
 
@@ -303,7 +305,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 }
                 search_google_result.append(new_entry)
 
-    if search_google_result is None: #Skip if nothing was found or there was an error in search
+    if len(search_google_result) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
         debuglog("Nothing was found or there was an error in the search.")
         return
@@ -371,7 +373,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
 
-        #debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+        debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
 
         weighting_value = False
         if gpturls:
