@@ -268,15 +268,51 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
     debuglog(f"Search Google result contains the following data: {json.dumps(search_google_result)}") #debug
-    google_result = None
-    if search_google_result is None: #Skip if nothing was found or there was an error in search
+    if search_google_result is None:
+        search_google_result = {"searchresults":[]} # Create a new empty list, if it was empty.
+
+    google_result = []
+
+    # Check for links in the original task
+    extractor = URLExtract()
+    urls = extractor.find_urls(usertask)
+    if len(urls) > 0:
+        # use a list comprehension to add https:// to each url if needed
+        urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
+
+        for url in urls:
+            debuglog(f"URL detected in original request: {url}") #debug
+            url_exists = False
+
+            # Add the URL to google_result if it doesn't already exist
+            if url not in google_result:
+                google_result.insert(0, url)
+
+            # Check if the URL exists in search_google_result
+            for entry in search_google_result:
+                if entry["url"] == url:
+                    url_exists = True
+                    break
+
+            # If the URL doesn't exist in search_google_result, add it as a new entry
+            if not url_exists:
+                new_entry = {
+                    str(len(search_google_result)): {
+                        "title": "Unknown",
+                        "url": url,
+                        "description": "This URL was provided with the original user prompt."
+                    }
+                }
+                search_google_result.append(new_entry)
+
+    if len(search_google_result) < 1: #Skip if nothing was found or there was an error in search
+        # The function has returned an error
+        debuglog("Nothing was found or there was an error in the search.")
         return
     for search_result in search_google_result['searchresults']:
         for key in search_result:
-            if not google_result is None:
-                google_result.append(search_result[key]['url'])
-            else:
-                google_result = [search_result[key]['url']]
+            google_result.append(search_result[key]['url'])
+
     # Let ChatGPT pick the most promising
     gpturls = False
 
@@ -304,22 +340,6 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         # the function returned False, resume unaltered
         debuglog("No results of initial sort.")
 
-    # Check for links in the original task
-    extractor = URLExtract()
-    urls = extractor.find_urls(usertask)
-    if len(urls) > 0:
-        # use a list comprehension to add https:// to each url if needed
-        urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
-        if google_result is None:
-            google_result = urls
-        else:
-            google_result[:0] = urls
-
-    # Check if the result is None
-    if google_result is None:
-        # The function has returned an error
-        debuglog("There was an error in the search.")
-        return
     # The function has returned a list of URLs
     for URL in google_result:
         with counter_lock:
@@ -691,6 +711,7 @@ def yes_or_no(string):
 def search_google(query):
     # Initialise the API with your key and search engine
     service = build("customsearch", "v1", developerKey=CUSTOMSEARCH_KEY)
+    debuglog(f"Google search for: \"{query}\"")
     cse = service.cse()
     try:
         # Make a search request to the API
