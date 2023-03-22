@@ -305,13 +305,14 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 }
                 search_google_result["searchresults"].append(new_entry)
 
+    debuglog(f"Search Google result contains the following data after adding manual URLs from the user prompt: {json.dumps(search_google_result)}") #debug
     if len(search_google_result["searchresults"]) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
         debuglog("Nothing was found or there was an error in the search.")
         return
     for search_result in search_google_result['searchresults']:
-        for key in search_result:
-            url = search_result[key]['url']
+        for key, value in search_result.items():
+            url = value['url']
             debuglog(f"Adding to google_result: {url}")
             # Add the URL to google_result if it doesn't already exist
             if url not in google_result:
