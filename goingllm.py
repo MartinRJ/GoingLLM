@@ -289,7 +289,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 google_result.insert(0, url)
 
             # Check if the URL exists in search_google_result
-            for entry in search_google_result:
+            for entry in search_google_result["searchresults"]:
                 if entry["url"] == url:
                     url_exists = True
                     break
@@ -297,7 +297,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
             # If the URL doesn't exist in search_google_result, add it as a new entry
             if not url_exists:
                 new_entry = {
-                    str(len(search_google_result)): {
+                    str(len(search_google_result["searchresults"])): {
                         "title": "Unknown",
                         "url": url,
                         "description": "This URL was provided with the original user prompt."
@@ -305,7 +305,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 }
                 search_google_result["searchresults"].append(new_entry)
 
-    if len(search_google_result) < 1: #Skip if nothing was found or there was an error in search
+    if len(search_google_result["searchresults"]) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
         debuglog("Nothing was found or there was an error in the search.")
         return
