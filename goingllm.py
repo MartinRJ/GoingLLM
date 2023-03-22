@@ -373,7 +373,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
 
-        #debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+        debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
 
         weighting_value = False
         if gpturls:
