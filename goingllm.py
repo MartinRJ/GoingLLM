@@ -85,7 +85,7 @@ def startup():
         return f'Error extracting body: {e}', 400
 
     if len(body) > BODY_MAX_LENGTH:
-        task_id = str(uuid.uuid4())
+        task_id = str(uuid4())
         errormessage = "Input is too long."
         debuglog(errormessage)
         writefile(FINAL_RESULT_CODE_ERROR_INPUT, errormessage, task_id)
@@ -100,7 +100,7 @@ def startup():
             dogoogleoverride = True
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
-        task_id = str(uuid.uuid4())
+        task_id = str(uuid4())
         debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile("0", False, task_id)
