@@ -289,7 +289,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 google_result.insert(0, url)
 
             # Check if the URL exists in search_google_result
-            for entry in search_google_result:
+            for entry in search_google_result["searchresults"]:
                 if entry["url"] == url:
                     url_exists = True
                     break
@@ -297,21 +297,26 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
             # If the URL doesn't exist in search_google_result, add it as a new entry
             if not url_exists:
                 new_entry = {
-                    str(len(search_google_result)): {
+                    str(len(search_google_result["searchresults"])): {
                         "title": "Unknown",
                         "url": url,
                         "description": "This URL was provided with the original user prompt."
                     }
                 }
-                search_google_result.append(new_entry)
+                search_google_result["searchresults"].append(new_entry)
 
-    if len(search_google_result) < 1: #Skip if nothing was found or there was an error in search
+    debuglog(f"Search Google result contains the following data after adding manual URLs from the user prompt: {json.dumps(search_google_result)}") #debug
+    if len(search_google_result["searchresults"]) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
         debuglog("Nothing was found or there was an error in the search.")
         return
     for search_result in search_google_result['searchresults']:
-        for key in search_result:
-            google_result.append(search_result[key]['url'])
+        for key, value in search_result.items():
+            url = value['url']
+            debuglog(f"Adding to google_result: {url}")
+            # Add the URL to google_result if it doesn't already exist
+            if url not in google_result:
+                google_result.append(url)
 
     # Let ChatGPT pick the most promising
     gpturls = False
@@ -328,6 +333,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
     debuglog(f"weighting content: {json.dumps(weighting)}")
     debuglog(f"search_google_result content: {json.dumps(search_google_result)}")
+    debuglog(f"google_result content: {json.dumps(google_result)}")
     if weighting:
         # the function returned a dictionary, re-sort
         sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
@@ -740,8 +746,11 @@ def search_google(query):
         return None
 
 def load_url_text(url):
+    headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36"
+    }
     try:
-        with requests.get(url, timeout=(3, 8), allow_redirects=True) as response:
+        with requests.get(url, headers=headers, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
             # process response
             status_code = response.status_code
@@ -757,12 +766,15 @@ def load_url_text(url):
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error ind load_url_text: {e}")
         return False
 
 def load_url_content(url):
+    headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36"
+    }
     try:
-        with requests.get(url, timeout=(3, 8), allow_redirects=True) as response:
+        with requests.get(url, headers=headers, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
             # process response
             status_code = response.status_code
@@ -778,7 +790,7 @@ def load_url_content(url):
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error in load_url_content: {e}")
         return False
 
 def replace_newlines(text):
@@ -788,14 +800,17 @@ def replace_newlines(text):
 def extract_content(url):
     # Try to send a request to the URL and catch possible exceptions
     mimetype, encoding = mimetypes.guess_type(url)
+    headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36"
+    }
     try:
-        with requests.head(url, timeout=(3, 8), allow_redirects=True) as response:
+        with requests.head(url, headers=headers, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
     except requests.exceptions.Timeout:
         debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error: {e}")
+        debuglog(f"Request error in extract_content: {e}")
         return False
     else:
         # process response
@@ -811,7 +826,7 @@ def extract_content(url):
                 # Check the content type of the response and handle it accordingly
                 if "application/pdf" in mimetype:
                     # Process PDF content
-                    with requests.get(url, stream=True, allow_redirects=True) as response:
+                    with requests.get(url, headers=headers, stream=True, allow_redirects=True) as response:
                         response.raise_for_status()
                         with BytesIO() as filecontent:
                             for chunk in response.iter_content(chunk_size=8192):
