@@ -293,9 +293,16 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
             # Check if the URL exists in search_google_result
             for entry in search_google_result["searchresults"]:
-                if entry["url"] == url:
-                    url_exists = True
-                    break
+                print(f"DEBUG, entry = {entry}")
+                try:
+                    if entry["url"] == url:
+                        url_exists = True
+                        break
+                except Exception as e:
+                    print(f"DEBUG, error: {e}")
+                else:
+                    print("DEBUG, no error")
+
 
             # If the URL doesn't exist in search_google_result, add it as a new entry
             if not url_exists:
