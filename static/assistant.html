@@ -238,6 +238,10 @@
 											var decodedText = decodeURIComponent(encodeURIComponent(answer));
 											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + decodedText;
 										break;
+									case FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH :
+											var decodedText = decodeURIComponent(encodeURIComponent(answer));
+											document.getElementById("output").innerText = document.getElementById("output").innerText + "\n\n" + decodedText;
+										break;
 									default:
 										Console.log("Unknown error: " + progress + "; Answer-property: " + answer)
 								}
