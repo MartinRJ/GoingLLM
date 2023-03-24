@@ -350,6 +350,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         # the function returned False, resume unaltered
         debuglog("No results of initial sort.")
 
+    processes = []
     # The function has returned a list of URLs
     for URL in google_result:
         with counter_lock:
@@ -368,73 +369,82 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         if exists_in_queue:
             continue  # Exists already
 
-        debuglog(f"Here are the URLs: {URL}")
-        dlfile = extract_content(URL)
-        if not dlfile:
-            responsemessage = "Error"
-            debuglog(f"Error summarizing URL content: {URL}")
-            continue
-        responsemessage = dlfile
+        process = Process(target=do_download_and_summary, args=(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weighting, gpturls, keyword, usertask, searchresults, URL, task_id))
+        process.start()
+        processes.append(process)
 
-        prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
-                f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
-                f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
-                f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
-                f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
-        system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
+    for process in processes:
+        process.join()
 
-        debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weighting, gpturls, keyword, usertask, searchresults, URL, task_id):
+    #Download file and create a summary, and append to searchresults
+    debuglog(f"Here are the URLs: {URL}")
+    dlfile = extract_content(URL)
+    if not dlfile:
+        responsemessage = "Error"
+        debuglog(f"Error summarizing URL content: {URL}")
+        return
+    responsemessage = dlfile
 
-        weighting_value = False
-        if gpturls:
-            if URL in gpturls.values():
-                # Find the corresponding key in the gpturls dictionary
-                key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
-                # Get the weighting value for the key
-                weighting_value = float(weighting[key])
+    prompt = (f"Es wurde folgende Anfrage gestellt: >>{usertask}<<. Im Folgenden findest du den Inhalt einer Seite aus den "
+            f"Ergebnissen einer Google-Suche zu dieser Anfrage, bitte fasse das Wesentliche zusammen um mit dem Resultat "
+            f"die Anfrage später bestmöglich beantworten zu können, stelle sicher, dass du sämtliche relevanten Spezifika, "
+            f"die in deinen internen Datenbanken sonst nicht vorhanden sind in der Zusammenfassung erwähnst. Erwähne auch "
+            f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
+    system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
 
-        max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
+    debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
 
-        #Check if there's a weighting value for this URL
-        if weighting_value and weighting_value > 0 and len(gpturls) > 0:
-            calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
-            if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-                debuglog(f"Error - not enough tokens left for summary of URL content with weighting: {URL}")
-                continue;
-            max_tokens_completion_summarize = calc_tokens
-            debuglog(f"Weighting applied: {str(weighting_value)} weight => {str(max_tokens_completion_summarize)} tokens")
-            if max_tokens_completion_summarize < 1:
-                max_tokens_completion_summarize = 1 # max_tokens may not be 0
+    weighting_value = False
+    if gpturls:
+        if URL in gpturls.values():
+            # Find the corresponding key in the gpturls dictionary
+            key = list(gpturls.keys())[list(gpturls.values()).index(URL)]
+            # Get the weighting value for the key
+            weighting_value = float(weighting[key])
 
-        #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-        text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
+    max_tokens_completion_summarize = MAX_TOKENS_SUMMARIZE_RESULT
 
-        #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-        test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
-        sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
-        if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-            debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
-            max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
-            if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-                debuglog(f"Not enough tokens after decreasing, for: {URL}")
-                continue # Not enough tokens
+    #Check if there's a weighting value for this URL
+    if weighting_value and weighting_value > 0 and len(gpturls) > 0:
+        calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
+        if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
+            debuglog(f"Error - not enough tokens left for summary of URL content with weighting: {URL}")
+            return;
+        max_tokens_completion_summarize = calc_tokens
+        debuglog(f"Weighting applied: {str(weighting_value)} weight => {str(max_tokens_completion_summarize)} tokens")
         if max_tokens_completion_summarize < 1:
-            debuglog(f"Error - no tokens left for summary of URL content: {URL}")
-            continue
-        if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-            debuglog(f"Error - not enough tokens left for summary of URL content: {URL}")
-            continue
-        prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+            max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
-        responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
-        if not responsemessage:
-            return None # (Fatal) error in chatcompletion
-        responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
-        #debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
-        #debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
-        debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
-        searchresults.append(f"{text_summary}{responsemessage}")
-        debuglog(f"Appending successful.")
+    #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
+    text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
+
+    #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
+    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+    sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
+    if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
+        debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
+        max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
+        if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+            debuglog(f"Not enough tokens after decreasing, for: {URL}")
+            return # Not enough tokens
+    if max_tokens_completion_summarize < 1:
+        debuglog(f"Error - no tokens left for summary of URL content: {URL}")
+        return
+    if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
+        debuglog(f"Error - not enough tokens left for summary of URL content: {URL}")
+        return
+    prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
+
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
+    if not responsemessage:
+        return None # (Fatal) error in chatcompletion
+    responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
+    #debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    #debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
+    searchresults.append(f"{text_summary}{responsemessage}")
+    debuglog(f"Appending successful.")
 
 def valid_keywords(keywords):
     if not keywords:
