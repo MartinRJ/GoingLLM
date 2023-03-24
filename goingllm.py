@@ -353,7 +353,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     # The function has returned a list of URLs
     for URL in google_result:
         with counter_lock:
-            percent = str(counter.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            percent = str(counter.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(google_result)) * 100)
             counter.value += 1
 
         writefile(percent, False, task_id)
