@@ -51,6 +51,8 @@ TEMPERATURE_FINAL_RESULT = float(os.getenv('temperature_final_result'))
 MAX_TOKENS_FINAL_RESULT = int(os.getenv('FINALRESULT_MAX_TOKEN_LENGTH'))
 TEMPERATURE_SELECT_SEARCHES = float(os.getenv('temperature_select_searches'))
 MAX_TOKENS_SELECT_SEARCHES_LENGTH = int(os.getenv('SELECT_SEARCHES_MAX_TOKEN_LENGTH'))
+TEMPERATURE_MORE_SEARCHES = float(os.getenv('temperature_more_searches'))
+MAX_TOKENS_MORE_SEARCHES_LENGTH = int(os.getenv('MORE_SEARCHES_MAX_TOKEN_LENGTH'))
 BODY_MAX_LENGTH = int(os.getenv('BODY_MAX_LENGTH'))
 GLOBAL_CHATCOMPLETION_TIMEOUT = int(os.getenv('GLOBAL_CHATCOMPLETION_TIMEOUT'))
 
@@ -61,6 +63,9 @@ FINAL_RESULT_CODE_ERROR_CUSTOMSEARCH = "-400" # Error in Custom Search API
 FINAL_RESULT_CODE_ERROR_OTHER_CUSTOM = "-600" # Other Error - error message in final_result
 FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH = "100" # Success (ChatCompletions-only result)
 FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH = "200" # Success (successfully used Custom Search API)
+FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH = "300" # Working (more search required used Custom Search API)
+
+MESSAGE_MORE_SEARCH_REQUIRED = "More searches required..."
 
 #BASIC AUTHENTICATION
 AUTH_UNAME = os.getenv('AUTH_UNAME')
@@ -182,8 +187,10 @@ def response_task(usertask, task_id, dogoogleoverride):
     if dogooglesearch == None or not dogooglesearch:
             if dogooglesearch == None:
                 debuglog("Chatcompletions error in should_perform_google_search")
+                pass
             else:
                 debuglog("No Google search necessary. Generating final response without search results.")
+                pass
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, False)
     elif dogooglesearch:
         debuglog("With Google-search, generating keywords.")
@@ -191,8 +198,10 @@ def response_task(usertask, task_id, dogoogleoverride):
         if keywords == None or not keywords:
             if keywords == None:
                 debuglog("Chatcompletions error in generate_keywords")
+                pass
             else:
                 debuglog("No search terms. Generating final response without search results.")
+                pass
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
         elif valid_keywords(keywords):
             debuglog("Keywords are valid, starting search.")
@@ -200,18 +209,25 @@ def response_task(usertask, task_id, dogoogleoverride):
             if searchresults == None or not searchresults:
                 if searchresults == None:
                     debuglog("Chatcompletions error in process_keywords_and_search")
+                    pass
                 else:
                     debuglog("Searchresults are empty. Generating final response without search results.")
+                    pass
                 final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
             else:
                 debuglog("Got search results, generating final results.")
-                final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
-                if final_result == None:
-                    debuglog("Chatcompletions error in generate_final_response_with_search_results")
-                    final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
+                #Is the information sufficient?
+                moresearches = do_more_searches(searchresults, usertask, task_id)
+                if not moresearches:
+                    final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+                    if final_result == None:
+                        debuglog("Chatcompletions error in generate_final_response_with_search_results")
+                        final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
+                    else:
+                        debuglog("Success with search results")
+                        final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
                 else:
-                    debuglog("Success with search results")
-                    final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
+                    writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
         else:
             debuglog("Keywords are not valid. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
@@ -220,6 +236,17 @@ def response_task(usertask, task_id, dogoogleoverride):
     writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
+
+def do_more_searches(searchresults, usertask, task_id):
+    prompt = f"Basierend auf den folgenden Informationen, möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen? Antworten Sie ausschließlich mit entweder \"Nein\" oder mit einem JSON-Objekt.  Möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen, so geben Sie bitte ein JSON-Objekt mit Ihren Anforderungen zurück, das wie folgt formatiert ist: \n{{\"action\": [\"<Aktionstyp1>\", \"<Aktionstyp2>\"], \"keywords\": [\"<Keyword1>\", \"<Keyword2>\", ...], \"documents\": [0, 1, ...], \"links\": [\"<Link1>\", \"<Link2>\", ...]}}\n\nAktionstyp kann entweder \"search\", \"viewDocuments\" oder \"openLinks\" sein. Wenn nein, antworten Sie ausschließlich mit \"Nein\", ohne weitere Erläuterung. Antworten Sie ausschließlich mit entweder einem JSON-Objekt wie angegeben oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {{\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}}).\n\nOriginale Useranfrage: \"{usertask}\"\n\nHier sind die Summaries und die prozentualen Anteile der Textlänge, die für die Zusammenfassung verwendet wurden (der Wert '100' für 'prozent' bedeutet, dass Sie hier bereits sämtliche Informationen sehen - 100% - die von der Seite extrahiert werden konnten, '1' würde bedeuten, dass nur 1% des Dokuments von der angegebenen URL zur Erstellung der Summery herangezogen wurde):\n"
+    system_prompt = "Ich ein persönlicher Assistent für die Internet-Recherche. Ich soll entscheiden, ob zur Bearbeitung einer bestimmten Useranfrage noch zusätzliche Google-Recherchen oder Web-Crawls nötig sind, oder ob die bisher gesammelten Informationen in Kombination mit den Daten aus meinen internen Datenbanken ausreichen. Ich antworte ausschließlich entweder mit einem JSON-Objekt oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}), falls die Informationen (die ich selbst in einer Anfrage zuvor als Summary zusammengefasst habe) ausreichen. Das JSON-Objekt soll folgendes Format haben (Beispiel): \"{\"action\": [\"<meine auswahl - optional>\" oder \"Nein\",\"<meine auswahl - optional>\",\"<meine auswahl - optional>\"], \"keywords\": [\"<optional - keywords>\"], \"documents\": [<optional - index des Dokuments>], \"links\": [\"<optional - Direktlinks>\"]}\". Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
+    debuglog(f"Searching with searchresults:\n{json.dumps(searchresults)}")
+    prompt = truncate_string_to_tokens(f"{prompt}{json.dumps(searchresults)}", MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_MORE_SEARCHES, MAX_TOKENS_MORE_SEARCHES_LENGTH, task_id)
+    debuglog(f"Response of more search:\n{responsemessage}")
+    if not responsemessage:
+        return None # (Fatal) error in chatcompletion
+    return None
 
 def generate_final_result_without_search(usertask, task_id, regular):
     #Perform and evaluate final regular request (without searchresults). 'regular' determines whether this was called due to an error (regular=False).
@@ -242,7 +269,7 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[index]["URL"]}\": {searchresults[index]["summary"]}' for index in searchresults if len(searchresults[index]["summary"]) > 0])
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
@@ -349,6 +376,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     else:
         # the function returned False, resume unaltered
         debuglog("No results of initial sort.")
+        pass #do nothing
 
     processes = []
     # The function has returned a list of URLs
@@ -443,7 +471,25 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
     #debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
     #debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
     debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
-    searchresults.append(f"{text_summary}{responsemessage}")
+    index = len(searchresults)
+    weight = weighting_value
+    if not weighting_value:
+        weight = "unknown"
+    else:
+        if isinstance(weighting_value, float):
+            weight = weighting_value * 100
+        else:
+            weight = "unknown"
+
+    searchresult = {
+        str(index): {
+            "URL": URL,
+            "summary": responsemessage,
+            "prozent": str(weight),
+            "keyword": keyword
+        }
+    }
+    searchresults.append(searchresult)
     debuglog(f"Appending successful.")
 
 def valid_keywords(keywords):
