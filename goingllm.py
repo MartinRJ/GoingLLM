@@ -565,7 +565,7 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
                 {"role": "user", "content": prompt}
             ]
         )
-        debuglog(f"Query completed. Usage = prompt_tokens: {str(response['usage']['prompt_tokens'])}, completion_tokens: {str(response['usage']['completion_tokens'])}, total_tokens: {str(response['usage']['total_tokens'])}\n\nPrompt:\n{prompt}")
+        debuglog(f"Query completed. Usage = prompt_tokens: {str(response['usage']['prompt_tokens'])}, completion_tokens: {str(response['usage']['completion_tokens'])}, total_tokens: {str(response['usage']['total_tokens'])}\n\nPrompt:\n{prompt[:1000]}")
         return response['choices'][0]['message']['content']
     except Exception as e:
         Errormessage = f"Error occured in chatcompletion: {e}"
