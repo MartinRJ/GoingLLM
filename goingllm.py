@@ -292,17 +292,11 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 google_result.insert(0, url)
 
             # Check if the URL exists in search_google_result
-            for entry in search_google_result["searchresults"]:
-                print(f"DEBUG, entry = {entry}")
-                try:
-                    if entry["url"] == url:
+            for search_result in search_google_result['searchresults']:
+                for key, value in search_result.items():
+                    if value['url'] == url:
                         url_exists = True
                         break
-                except Exception as e:
-                    print(f"DEBUG, error: {e}")
-                else:
-                    print("DEBUG, no error")
-
 
             # If the URL doesn't exist in search_google_result, add it as a new entry
             if not url_exists:
