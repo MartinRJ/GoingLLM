@@ -269,7 +269,8 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[index]["URL"]}\": {searchresults[index]["summary"]}' for index in searchresults if len(searchresults[index]["summary"]) > 0])
+    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[i][str(i)]["URL"]}\": {searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
