@@ -102,6 +102,14 @@ SELECT_SEARCHES_MAX_TOKEN_LENGTH
 256  
 [The ChatGPT token length for selecting the most promising search results with weighting]
 
+MORE_SEARCHES_MAX_TOKEN_LENGTH  
+1300  
+[The ChatGPT token length for the selection whether more searches are required]
+
+temperature_more_searches  
+0.3  
+[The ChatGPT token length for choosing whether more searches are required]
+
 temperature_select_searches  
 0.4
 
