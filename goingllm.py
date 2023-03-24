@@ -23,12 +23,16 @@ import queue
 import re
 import requests
 import spacy
+import string
 import threading
 import tiktoken
 import time
 from urlextract import URLExtract
-import uuid
+from uuid import uuid4
 app = Flask(__name__)
+
+from urlextract import URLExtract
+import re
 
 SECRET_KEY = os.getenv('SECRETKEY')
 CUSTOMSEARCH_KEY = os.getenv('CUSTOMSEARCHKEY')
@@ -81,7 +85,7 @@ def startup():
         return f'Error extracting body: {e}', 400
 
     if len(body) > BODY_MAX_LENGTH:
-        task_id = str(uuid.uuid4())
+        task_id = str(uuid4())
         errormessage = "Input is too long."
         debuglog(errormessage)
         writefile(FINAL_RESULT_CODE_ERROR_INPUT, errormessage, task_id)
@@ -96,7 +100,7 @@ def startup():
             dogoogleoverride = True
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
-        task_id = str(uuid.uuid4())
+        task_id = str(uuid4())
         debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile("0", False, task_id)
@@ -274,8 +278,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     google_result = []
 
     # Check for links in the original task
-    extractor = URLExtract()
-    urls = extractor.find_urls(usertask)
+    urls = extract_document_urls_using_urlextract(usertask)
     if len(urls) > 0:
         # use a list comprehension to add https:// to each url if needed
         urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
@@ -289,10 +292,11 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 google_result.insert(0, url)
 
             # Check if the URL exists in search_google_result
-            for entry in search_google_result["searchresults"]:
-                if entry["url"] == url:
-                    url_exists = True
-                    break
+            for search_result in search_google_result['searchresults']:
+                for key, value in search_result.items():
+                    if value['url'] == url:
+                        url_exists = True
+                        break
 
             # If the URL doesn't exist in search_google_result, add it as a new entry
             if not url_exists:
@@ -349,7 +353,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     # The function has returned a list of URLs
     for URL in google_result:
         with counter_lock:
-            percent = str(counter.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(urls)) * 100)
+            percent = str(counter.value / ((NUMBER_GOOGLE_RESULTS * NUMBER_OF_KEYWORDS)+len(google_result)) * 100)
             counter.value += 1
 
         writefile(percent, False, task_id)
@@ -799,6 +803,9 @@ def replace_newlines(text):
 # Define a function that takes a URL as a parameter and extracts the content
 def extract_content(url):
     # Try to send a request to the URL and catch possible exceptions
+    # Add a list of supported file extensions
+    supported_extensions = [".md", ".log", ".conf", ".config", ".ini", ".yml", ".yaml", ".xml", ".json", ".html", ".php", ".js", ".py", ".java", ".c", ".cpp", ".cs", ".rb", ".sh", ".r", ".m", ".sql"]
+    url_extension = os.path.splitext(url)[-1]
     mimetype, encoding = mimetypes.guess_type(url)
     headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36"
@@ -894,6 +901,16 @@ def extract_content(url):
                             return False
                     else:
                         return False
+                elif url_extension in supported_extensions:
+                    # If the URL's file extension is in the supported list
+                    filecontent = load_url_text(url)
+                    if filecontent:
+                        # Process the file as plain text
+                        filecontent = replace_newlines(filecontent)
+                        debuglog(f"downloaded supported file as plaintext: {filecontent[:300]}")  # debug
+                        return filecontent[:MAX_FILE_CONTENT]
+                    else:
+                        return False
                 else:
                     # The content type is not supported
                     debuglog(f"Content type '{mimetype}' not supported")
@@ -975,6 +992,132 @@ def debuglog(text, create=False):
             f.writelines([text, "\n--------------------\n"])
     except Exception as e:
         print(f"Error debuglog: could not write to file: {e}", flush=True)
+
+#----- Extract URL functions
+def remove_punctuation(urls):
+    cleaned_urls = []
+    for url in urls:
+        cleaned_url = url.rstrip(string.punctuation)
+        cleaned_urls.append(cleaned_url)
+    return cleaned_urls
+
+def normalize_urls_protocol(urls):
+    normalized_urls = []
+    for url in urls:
+        # Replace improper protocols and "http://" with "https://"
+        url = re.sub(r'^(?:htp://|http:/*|http://|https?://)', 'https://', url, flags=re.IGNORECASE)
+       
+        # Add "https://" protocol if missing
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+
+        normalized_urls.append(url)
+    return normalized_urls
+
+def find_additional_urls(text):
+    tlds = [".com", ".tk", ".cn", ".de", ".net", ".uk", ".org", ".nl", ".ru", ".br", ".au",
+    ".fr", ".eu", ".it", ".pl", ".in", ".info", ".es", ".ca", ".io", ".gov", ".gov.uk", ".gouv.fr",
+    ".gc.ca", ".gov.au", ".gov.in", ".gov.za", ".gov.cn", ".gov.br", ".gov.sg", ".gov.de",
+    ".gov.it", ".gov.nl", ".gov.my", ".gov.ru", ".gov.ua", ".gov.ie", ".gov.nz", ".gov.il",
+    ".gov.pl", ".edu", ".ac", ".sci", ".research", ".scholar", ".ir", ".ch", ".at", ".be", ".dk",
+    ".fi", ".gr", ".hu", ".no", ".pt", ".se", ".co", ".biz", ".co.uk", ".ac.uk", ".edu.au",
+    ".edu.sg", ".edu.de", ".coop", ".museum", ".pro", ".name", ".govt.nz"]
+    additional_urls = []
+
+    # Find URLs with https:// or http:// and special characters at the end
+    pattern = re.compile(r'https?://[^\s!\"\'\[\]\(\)]+')
+    matches = pattern.finditer(text)
+    for match in matches:
+        additional_urls.append(match.group())
+
+    # Find URLs without https:// or http://
+    url_chars = r"[A-Za-z0-9\-\._~:/\?#\[\]@!\$&'\(\)\*\+,;=äöüÄÖÜß]+"
+    
+    for tld in tlds:
+        pattern = re.compile(fr"{url_chars}{re.escape(tld)}")
+        matches = pattern.finditer(text)
+        for match in matches:
+            if not match.group().startswith(("http://", "https://")):
+                additional_urls.append(match.group())
+    return additional_urls
+
+def remove_extracted_urls_from_text(text, extracted_urls):
+    cleaned_text = text
+    for url in extracted_urls:
+        index = text.find(url)
+        if index > 0 and text[index - 1] == ".":
+            cleaned_text = cleaned_text.replace("." + url, "", 1)
+        else:
+            cleaned_text = cleaned_text.replace(url, "", 1)
+    return cleaned_text
+
+def extract_document_urls_using_urlextract(text):
+    if not text:
+        return []
+    #Extracts all URLs from text
+    tlds = [".com", ".tk", ".cn", ".de", ".net", ".uk", ".org", ".nl", ".ru", ".br", ".au",
+    ".fr", ".eu", ".it", ".pl", ".in", ".info", ".es", ".ca", ".io", ".gov", ".gov.uk", ".gouv.fr",
+    ".gc.ca", ".gov.au", ".gov.in", ".gov.za", ".gov.cn", ".gov.br", ".gov.sg", ".gov.de",
+    ".gov.it", ".gov.nl", ".gov.my", ".gov.ru", ".gov.ua", ".gov.ie", ".gov.nz", ".gov.il",
+    ".gov.pl", ".edu", ".ac", ".sci", ".research", ".scholar", ".ir", ".ch", ".at", ".be", ".dk",
+    ".fi", ".gr", ".hu", ".no", ".pt", ".se", ".co", ".biz", ".co.uk", ".ac.uk", ".edu.au",
+    ".edu.sg", ".edu.de", ".coop", ".museum", ".pro", ".name", ".govt.nz"]
+    file_exts = [
+        ".txt", ".csv", ".md", ".log", ".conf", ".config", ".ini", ".yml", ".yaml",
+        ".xml", ".json", ".html", ".php", ".js", ".py", ".java", ".c", ".cpp",
+        ".cs", ".rb", ".sh", ".r", ".m", ".sql"
+    ]
+
+    replacements = []
+    uuids = []
+
+    pattern = re.compile(r'/(?P<filename>[\w\-]+)(?P<file_ext>\.[A-Za-z0-9]+)(?P<next_char>[\s\.,:;\?!])')
+    #Make sure that TLDs don't override file extensions
+    for tld in tlds:
+        for file_ext in file_exts:
+            if file_ext.startswith(tld):
+                matches = pattern.finditer(text)
+                for match in matches:
+                    if match.group('file_ext') == file_ext:
+                        tempuuid = uuid4()
+                        temp_tld = f"{tempuuid}.com"
+                        original_filename = match.group('filename')
+                        replacements.append((original_filename, file_ext, temp_tld))
+                        uuids.append(tempuuid)
+                        original_str = f"/{match.group('filename')}{file_ext}{match.group('next_char')}"
+                        replaced_str = f"/{tempuuid}.com{match.group('next_char')}"
+                        text = text.replace(original_str, replaced_str)
+
+    extractor = URLExtract()
+    all_urls = extractor.find_urls(text)
+    
+    # Filter out the URLs that are just TLDs
+    cleaned_urls = []
+    for url in all_urls:
+        index = text.find(url)
+        if index == 0 or text[index - 1] != ".":
+            cleaned_urls.append(url)
+
+    # Remove the extracted URLs from the text
+    cleaned_text = remove_extracted_urls_from_text(text, all_urls)
+    
+    # Find additional URLs with special characters at the end
+    additional_urls = find_additional_urls(cleaned_text)
+
+    cleaned_urls.extend(additional_urls)
+    
+    cleaned_urls = normalize_urls_protocol(cleaned_urls)
+    cleaned_urls = remove_punctuation(cleaned_urls)
+
+    # Replace temporary TLDs and filenames back to original values
+    for original_filename, file_ext, temp_tld in replacements:
+        cleaned_urls = [url.replace(temp_tld, f"{original_filename}{file_ext}") for url in cleaned_urls]
+
+    # Remove URLs containing any of the stored UUIDs
+    cleaned_urls = [url for url in cleaned_urls if not any(str(tempuuid) in url for tempuuid in uuids)]
+    # Remove duplicates
+    cleaned_urls = list(set(cleaned_urls))
+    return cleaned_urls
 
 if __name__ == "__main__":
     app.run()
