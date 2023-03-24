@@ -449,7 +449,8 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
     text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
 
     #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [text for text in searchresults if len(text) > 0])
+    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[i][str(i)]["URL"]}\": {searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+
     sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
         debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
