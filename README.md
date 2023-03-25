@@ -106,9 +106,15 @@ MORE_SEARCHES_MAX_TOKEN_LENGTH
 1300  
 [The ChatGPT token length for the selection whether more searches are required]
 
+CLEANUP_MAX_TOKEN_LENGTH  
+50  
+[The ChatGPT token length for the selection which summaries can be removed]
+
+temperature_cleanup  
+0.3
+
 temperature_more_searches  
-0.3  
-[The ChatGPT token length for choosing whether more searches are required]
+0.3
 
 temperature_select_searches  
 0.4
