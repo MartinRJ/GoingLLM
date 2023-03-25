@@ -52,7 +52,7 @@ cx
 [Your Google Custom Search API 'CX' key.]
 
 BODY_MAX_LENGTH  
-15000  
+16000  
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH  

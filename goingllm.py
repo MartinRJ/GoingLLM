@@ -271,7 +271,12 @@ def remove_searchresults(searchresults, keep_json):
         if "cleanedup" in keep_json:
             cleanedup_indices = set(keep_json["cleanedup"])
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
-            return cleaned_searchresults
+            # Re-index the cleaned_searchresults
+            reindexed_searchresults = []
+            for idx, result in enumerate(cleaned_searchresults):
+                reindexed_searchresults.append({str(idx): result[str(list(result.keys())[0])]})
+
+            return reindexed_searchresults
         else:
             debuglog("remove_searchresults - no \"cleanedup\" object detected")
             return False
@@ -280,6 +285,7 @@ def remove_searchresults(searchresults, keep_json):
         return False
 
 def extract_json_object(text):
+    # Extracts the first JSON object from the given text
     try:
         debuglog(f"extract_json_object - Input text: {text}")
         json_str = re.search(r'\{.*\}', text).group()
