@@ -310,7 +310,8 @@ def detectNo(response):
 def process_more_searchresults_response(response_json, searchresults, usertask, task_id):
     valid_json = False
     try:
-       valid_json = validate_more_searchresults_json(json.loads(response_json))
+        json_object = json.loads(response_json)
+        valid_json = validate_more_searchresults_json(json_object)
     except ValueError as e:
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False
@@ -318,9 +319,9 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         #Calculate remaining tokens.
         debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
         #Detect actions
-        actions = response_json["action"]
+        actions = json_object["action"]
         if "search" in actions:
-            keywords = response_json["keywords"]
+            keywords = json_object["keywords"]
             if keywords:
                 # Perform the search action with the given keywords
                 debuglog(f"Searching for: {keywords}")
@@ -328,7 +329,7 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
                 debuglog("No keywords specified. Search is not performed.")
 
         if "viewDocuments" in actions:
-            documents = response_json["documents"]
+            documents = json_object["documents"]
             if documents:
                 # Perform the action to display documents
                 debuglog(f"Display documents: {documents}")
@@ -336,7 +337,7 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
                 debuglog("No documents specified. Displaying documents is not performed.")
 
         if "openLinks" in actions:
-            links = response_json["links"]
+            links = json_object["links"]
             if links:
                 # Perform the action to open links
                 debuglog(f"Open links: {links}")
