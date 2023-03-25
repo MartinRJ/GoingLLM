@@ -269,7 +269,7 @@ def remove_searchresults(searchresults, keep_json):
     # If there is no 'cleanup' object in keep_json, or on error, it returns False
     try:
         if "cleanedup" in keep_json:
-            cleanedup_indices = set(keep_json["cleanedup"].values())
+            cleanedup_indices = set(keep_json["cleanedup"])
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
             return cleaned_searchresults
         else:
