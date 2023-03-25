@@ -273,6 +273,7 @@ def remove_searchresults(searchresults, keep_json):
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
             return cleaned_searchresults
         else:
+            debuglog("remove_searchresults - no \"cleanedup\" object detected")
             return False
     except Exception as e:
         debuglog(f"Error in remove_searchresults: {e}")
