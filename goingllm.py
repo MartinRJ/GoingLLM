@@ -309,15 +309,13 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         return False
 
 def validate_more_searchresults_json(response_json):
-    required_keys = {"action", "keywords", "documents", "links"}
     action_types = {"search", "viewDocuments", "openLinks"}
 
     if not isinstance(response_json, dict):
         raise ValueError("The response JSON object must be a dictionary.")
 
-    missing_keys = required_keys.difference(response_json.keys())
-    if missing_keys:
-        raise ValueError(f"The response JSON object is missing the required keys: {missing_keys}")
+    if "action" not in response_json:
+        raise ValueError("The response JSON object is missing the required 'action' key.")
 
     actions = response_json["action"]
     if not isinstance(actions, list) or not all(isinstance(action, str) for action in actions):
@@ -327,17 +325,23 @@ def validate_more_searchresults_json(response_json):
         if action not in action_types:
             raise ValueError(f"Invalid action: {action}. Action type must be one of the following: {action_types}")
 
-    keywords = response_json["keywords"]
-    if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
-        raise ValueError("The 'keywords' list must be a list of strings.")
+    if not any(key in response_json for key in ("keywords", "documents", "links")):
+        raise ValueError("The response JSON object must have at least one of the following keys: 'keywords', 'documents', 'links'")
 
-    documents = response_json["documents"]
-    if not isinstance(documents, list) or not all(isinstance(document, int) for document in documents):
-        raise ValueError("The 'documents' list must be a list of integers.")
+    if "keywords" in response_json:
+        keywords = response_json["keywords"]
+        if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
+            raise ValueError("The 'keywords' list must be a list of strings.")
 
-    links = response_json["links"]
-    if not isinstance(links, list) or not all(isinstance(link, str) for link in links):
-        raise ValueError("The 'left' list must be a list of strings.")
+    if "documents" in response_json:
+        documents = response_json["documents"]
+        if not isinstance(documents, list) or not all(isinstance(document, int) for document in documents):
+            raise ValueError("The 'documents' list must be a list of integers.")
+
+    if "links" in response_json:
+        links = response_json["links"]
+        if not isinstance(links, list) or not all(isinstance(link, str) for link in links):
+            raise ValueError("The 'links' list must be a list of strings.")
 
     return True
 
