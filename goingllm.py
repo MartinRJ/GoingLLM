@@ -53,6 +53,8 @@ TEMPERATURE_SELECT_SEARCHES = float(os.getenv('temperature_select_searches'))
 MAX_TOKENS_SELECT_SEARCHES_LENGTH = int(os.getenv('SELECT_SEARCHES_MAX_TOKEN_LENGTH'))
 TEMPERATURE_MORE_SEARCHES = float(os.getenv('temperature_more_searches'))
 MAX_TOKENS_MORE_SEARCHES_LENGTH = int(os.getenv('MORE_SEARCHES_MAX_TOKEN_LENGTH'))
+TEMPERATURE_CLEANUP = float(os.getenv('temperature_cleanup'))
+MAX_TOKENS_CLEANUP_LENGTH = int(os.getenv('CLEANUP_MAX_TOKEN_LENGTH'))
 BODY_MAX_LENGTH = int(os.getenv('BODY_MAX_LENGTH'))
 GLOBAL_CHATCOMPLETION_TIMEOUT = int(os.getenv('GLOBAL_CHATCOMPLETION_TIMEOUT'))
 
@@ -66,6 +68,9 @@ FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH = "200" # Success (successfully used
 FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH = "300" # Working (more search required used Custom Search API)
 
 MESSAGE_MORE_SEARCH_REQUIRED = "More searches required..."
+
+summarytext_start = "\nZusammenfassung der Ergebnisse von \""
+summarytext_end = "\": "
 
 #BASIC AUTHENTICATION
 AUTH_UNAME = os.getenv('AUTH_UNAME')
@@ -221,6 +226,8 @@ def response_task(usertask, task_id, dogoogleoverride):
                 if moresearches and not detectNo(moresearches):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
+                    # First clean up
+                    searchresults = cleanup(searchresults, usertask)
                     more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id)
                     if more_searchresults:
                         searchresults.append(more_searchresults)
@@ -239,6 +246,37 @@ def response_task(usertask, task_id, dogoogleoverride):
     writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
+
+def cleanup(searchresults, usertask):
+    #Ask GPT which searchresults should be kept, the rest will be removed. Returns the original searchresults on error.
+    prompt = f"Bitte räume die folgenden Summaries zur Useranfrage >>{usertask}<< auf. Antworte ausschließlich mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden, diejenigen die nicht nötig bzw. hilfreich sind sollen nicht im cleandup-JSON-Objekt aufgelistet werden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden. \n\nHier sind die bisherigen gesammelten Summaries, die für die Beantwortung der Useranfrage gesammelt wurden:\n\n{json.dumps(searchresults)}"
+    system_prompt = "Ich ein persönlicher Assistent für die Internet-Recherche. Ich soll die bisher gesammelten Informationen zu einer bestimmten Useranfrage aufräumen. Ich antworte ausschließlich entweder mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden. Beispiel: {\"cleanedup\": {1,3,4}} Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
+    prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CLEANUP_LENGTH, system_prompt)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CLEANUP, MAX_TOKENS_CLEANUP_LENGTH)
+    if not responsemessage:
+        return searchresults # (Fatal) error in chatcompletion, return original searchresults
+    debuglog(f"Cleanup. Keep only the following searchresults: {responsemessage}")
+    keep_json = extract_json_object(responsemessage)
+    if not keep_json:
+        return searchresults
+    new_searchresults = remove_searchresults(searchresults, keep_json)
+    if not new_searchresults:
+        return searchresults
+    return new_searchresults
+
+def remove_searchresults(searchresults, keep_json):
+    # Returns a version of searchresults with every entry removed that is not listed in keep_json.
+    # If there is no 'cleanup' object in keep_json, or on error, it returns False
+    try:
+        if "cleanedup" in keep_json:
+            cleanedup_indices = set(keep_json["cleanedup"].values())
+            cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
+            return cleaned_searchresults
+        else:
+            return False
+    except Exception as e:
+        debuglog(f"Error in remove_searchresults: {e}")
+        return False
 
 def extract_json_object(text):
     try:
@@ -275,8 +313,11 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
        valid_json = validate_more_searchresults_json(json.loads(response_json))
     except ValueError as e:
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
-        return False 
+        return False
     if valid_json:
+        #Calculate remaining tokens.
+        debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
+        #Detect actions
         actions = response_json["action"]
         if "search" in actions:
             keywords = response_json["keywords"]
@@ -346,11 +387,11 @@ def validate_more_searchresults_json(response_json):
     return True
 
 def do_more_searches(searchresults, usertask, task_id):
-    prompt = f"Basierend auf den folgenden Informationen, möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen? Antworten Sie ausschließlich mit entweder \"Nein\" oder mit einem JSON-Objekt.  Möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen, so geben Sie bitte ein JSON-Objekt mit Ihren Anforderungen zurück, das wie folgt formatiert ist: \n{{\"action\": [\"<Aktionstyp1>\", \"<Aktionstyp2>\"], \"keywords\": [\"<Keyword1>\", \"<Keyword2>\", ...], \"documents\": [0, 1, ...], \"links\": [\"<Link1>\", \"<Link2>\", ...]}}\n\nAktionstyp kann entweder \"search\", \"viewDocuments\" oder \"openLinks\" sein. Wenn nein, antworten Sie ausschließlich mit \"Nein\", ohne weitere Erläuterung. Antworten Sie ausschließlich mit entweder einem JSON-Objekt wie angegeben oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {{\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}}).\n\nOriginale Useranfrage: \"{usertask}\"\n\nHier sind die Summaries und die prozentualen Anteile der Textlänge, die für die Zusammenfassung verwendet wurden (der Wert '100' für 'prozent' bedeutet, dass Sie hier bereits sämtliche Informationen sehen - 100% - die von der Seite extrahiert werden konnten, '1' würde bedeuten, dass nur 1% des Dokuments von der angegebenen URL zur Erstellung der Summery herangezogen wurde):\n"
+    prompt = f"Basierend auf den folgenden Informationen, möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen? Antworten Sie ausschließlich mit entweder \"Nein\" oder mit einem JSON-Objekt.  Möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen, so geben Sie bitte ein JSON-Objekt mit Ihren Anforderungen zurück, das wie folgt formatiert ist: \n{{\"action\": [\"<Aktionstyp1>\", \"<Aktionstyp2>\"], \"keywords\": [\"<Keyword1>\", \"<Keyword2>\", ...], \"documents\": [0, 1, ...], \"links\": [\"<Link1>\", \"<Link2>\", ...]}}\n\nAktionstyp kann entweder \"search\", \"viewDocuments\" oder \"openLinks\" sein. Wenn nein, antworten Sie ausschließlich mit \"Nein\", ohne weitere Erläuterung. Antworten Sie ausschließlich mit entweder einem JSON-Objekt wie angegeben oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {{\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}}).\n\nOriginale Useranfrage: \"{usertask}\"\n\nHier sind die Summaries und die prozentualen Anteile der Tokens, die für die Erstellung der Zusammenfassungen jeweils verwendet wurden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden:\n"
     system_prompt = "Ich ein persönlicher Assistent für die Internet-Recherche. Ich soll entscheiden, ob zur Bearbeitung einer bestimmten Useranfrage noch zusätzliche Google-Recherchen oder Web-Crawls nötig sind, oder ob die bisher gesammelten Informationen in Kombination mit den Daten aus meinen internen Datenbanken ausreichen. Ich antworte ausschließlich entweder mit einem JSON-Objekt oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}), falls die Informationen (die ich selbst in einer Anfrage zuvor als Summary zusammengefasst habe) ausreichen. Das JSON-Objekt soll folgendes Format haben (Beispiel): \"{\"action\": [\"<meine auswahl - optional>\" oder \"Nein\",\"<meine auswahl - optional>\",\"<meine auswahl - optional>\"], \"keywords\": [\"<optional - keywords>\"], \"documents\": [<optional - index des Dokuments>], \"links\": [\"<optional - Direktlinks>\"]}\". Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
     debuglog(f"Searching with searchresults:\n{json.dumps(searchresults)}")
     prompt = truncate_string_to_tokens(f"{prompt}{json.dumps(searchresults)}", MAX_TOKENS_MORE_SEARCHES_LENGTH, system_prompt)
-    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_MORE_SEARCHES, MAX_TOKENS_MORE_SEARCHES_LENGTH, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_MORE_SEARCHES, MAX_TOKENS_MORE_SEARCHES_LENGTH)
     debuglog(f"Response of more search:\n{responsemessage}")
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
@@ -373,16 +414,16 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     if not regular:
         system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und muss auf deine Anfrage leider gerade ohne Internetrecherche antworten. Ich hatte zwar zuvor entschieden, dass zur Beantwortung deiner Anfrage eine Internetrecherche nötig oder hilfreich wäre, jedoch gab es leider einen Fehler bei der Internetrecherche."
     usertask = truncate_string_to_tokens(usertask, MAX_TOKENS_FINAL_RESULT, system_prompt)
-    final_result = chatcompletion_with_timeout(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    final_result = chatcompletion_with_timeout(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[i][str(i)]["URL"]}\": {searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
 
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
-    final_result = chatcompletion_with_timeout(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, task_id)
+    final_result = chatcompletion_with_timeout(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
     return final_result
 
 def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
@@ -466,7 +507,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
     #debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
     #debuglog(f"Page content - truncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
-    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     weighting = extract_json(responsemessage, "weighting")
@@ -554,10 +595,10 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
             max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
     #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-    text_summary = F"\nZusammenfassung der Ergebnisse von \"{URL}\": "
+    text_summary = f"{summarytext_start}{URL}{summarytext_end}"
 
     #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'\nZusammenfassung der Ergebnisse von \"{searchresults[i][str(i)]["URL"]}\": {searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
 
     sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
@@ -574,7 +615,7 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
         return
     prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
-    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SUMMARIZE_RESULT, max_tokens_completion_summarize)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
@@ -621,7 +662,7 @@ def generate_keywords(usertask, task_id):
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche, und das Format meiner Antworten ist immer ein JSON-Objekt mit dem Schlüssel 'keywords', das zur Anfrage passende Google-Suchbegriffe oder -phrasen enthält. Ich unterstütze Google-Suchfilter wie site:, filetype:, allintext:, inurl:, link:, related: und cache: sowie Suchoperatoren wie Anführungszeichen, und die Filter after: / before: um Suchergebnisse aus bestimmten Zeiträumen zu finden. Ich berücksichtige besonders spezifische Benutzer-Eingaben in Anfragen. Besonders wenn nach spezifischen Daten oder Formaten verlangt wird, dann passe ich meine auszugebenden Suchbegriffe im JSON-Objekt der Anfrage möglichst genau an. Beispiel-Anwort zu einer Beispiel-Anfrage \"Wie spät ist es?\": {\"keywords\": [\"aktuelle Uhrzeit\",\"Uhrzeit jetzt\",\"Atomuhr genau\"]}."
 
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CREATE_SEARCHTERMS, system_prompt)
-    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CREATE_SEARCHTERMS, MAX_TOKENS_CREATE_SEARCHTERMS)
     
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
@@ -649,7 +690,7 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     prompt = f"Es wurde soeben folgende Anfrage gestellt: >>{usertask}<<. Benötigst du weitere Informationen aus einer Google-Suche, um diese Anfrage im Anschluss zu erfüllen? Bitte antworte mit \"Ja\" oder \"Nein\". Falls du keinen Zugriff auf Informationen hast die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls du nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wirst), oder deine internen Informationen in Bezug auf die Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte mit \"Ja\". Bei Anfragen oder Fragen die du mit dem Wissen aus deinen Datenbanken alleine ausreichend beantworten kannst (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte mit \"Nein\". Würdest du weitere Recherche-Ergebnisse aus einer Google-Suche benötigen, um diese Anfrage zufriedenstellend zu beantworten, Ja oder Nein?"
     system_prompt = f"Ich bin dein persönlicher Assistent für die Internetrecherche und antworte ausschließlich nur mit \"Ja\" oder \"Nein\" um initial zu entscheiden ob eine zusätzliche Internetsuche nötig sein wird um in Folge eine bestimmte Anfrage zu beantworten. Mir ist bewusst, dass ich zur Lösung der Aufgabe/Anfrage im Verlauf des Chats bei Bedarf mit neuen relevanten Google-Suchresultaten gespeist werde. Für den Fall, dass ich keinen Zugriff auf benötigte Informationen habe die notwendig sind um die Anfrage zu beantworten (zum Beispiel falls nach Dingen wie der aktuellen Uhrzeit oder nach aktuellen Ereignissen gefragt wird), oder meine internen Informationen in Bezug auf eine Anfrage nicht mehr aktuell sind zum aktuellen Zeitpunkt ({now_str} UTC), so antworte ich immer mit \"Ja\", in dem Wissen, dass mir diese Informationen im Verlauf des Chats noch zur Verfügung gestellt werden. Bei Anfragen oder Fragen die ich mit dem Wissen aus meinen Datenbanken alleine ausreichend beantworten kann (zum Beispiel bei der Frage nach der Lösung einfacher Berechnungen wie \"Wieviel ist 2*2?\", die keine zusätzlichen Daten benötigen), antworte ich immer mit \"Nein\"."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_DECISION_TO_GOOGLE, system_prompt)
-    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE, task_id)
+    responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     debuglog(f"Does ChatGPT require a Google-Search: {responsemessage}")
@@ -662,7 +703,7 @@ def preprocess_user_input(usertask):
         usertask = usertask.replace("<<", "»").replace(">>", "«")
     return usertask
 
-def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id):
+def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens):
     try:
         response = openai.ChatCompletion.create(
         model=MODEL,
@@ -680,9 +721,9 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
         debuglog(Errormessage)
         return False
 
-def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, task_id, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
+def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens, task_id)
+        future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens)
 
         try:
             response = future.result(timeout)
