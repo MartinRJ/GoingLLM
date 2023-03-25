@@ -292,11 +292,10 @@
 								console.log("NO PROGRESS. NO FINAL RESULT.")
 							}
 						}
-						else if (xhr.status === 400)
-						{
-                    		console.error("Error 400: " + xhr.responseText);
-							clearInterval(intervalId)
-                		}
+					};
+					xhr.onerror = function () {
+						console.error("Request error: " + xhr.status + ": " + xhr.statusText);
+						clearInterval(intervalId);
 					};
 					xhr.send();
 				}, fUpdateFrequency);
