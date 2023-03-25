@@ -281,7 +281,8 @@ def remove_searchresults(searchresults, keep_json):
 
 def extract_json_object(text):
     try:
-        json_str = re.search(r'\{.*\}', text).group()
+        debuglog(f"extract_json_object - Input text: {text}")
+        json_str = re.search(r'\{.*?\}', text).group()
         return json.loads(json_str)
     except (AttributeError, json.JSONDecodeError):
         debuglog("Error in extract_json_object")
