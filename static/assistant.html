@@ -3,7 +3,8 @@
 	<head>
 		<title>Assistant</title>
 		<style>
-			body {
+			body
+			{
 				margin: 0;
 				padding: 0;
 				height: 100vh;
@@ -11,7 +12,8 @@
 				flex-direction: column;
 			}
 
-			#output {
+			#output
+			{
 				flex: 1;
 				padding: 20px;
 				overflow-y: auto;
@@ -19,7 +21,8 @@
 				max-height: calc(100vh - 70px);
 			}
 
-			#input {
+			#input
+			{
 				position: relative;
 				display: flex;
 				align-items: center;
@@ -35,14 +38,16 @@
 				font-family: Arial, Helvetica, sans-serif;
 			}
 
-			#input-container {
+			#input-container
+			{
 				position: relative;
 				margin-top: auto;
 				display: flex;
 				flex-direction: column;
 			}
 
-			#submit {
+			#submit
+			{
 				width: 30px;
 				height: 30px;
 				background-color: #ccc;
@@ -63,13 +68,15 @@
 				margin-bottom: 10px;
 			}
 
-			#progress-bar {
+			#progress-bar
+			{
 				width: 100%;
 				height: 20px;
 				background-color: #ddd;
 				position: relative;
 			}
-			#progress {
+			#progress
+			{
 				width: 0%;
 				height: 100%;
 				background-color: #4CAF50;
@@ -78,14 +85,16 @@
 				left: 0;
 				transition: width 15s;
 			}
-			#alwaysGoogle-container {
+			#alwaysGoogle-container
+			{
 				position: absolute;
 				top: 10px;
 				right: 10px;
 				display: flex;
 				align-items: center;
 			}
-			#alwaysGoogle {
+			#alwaysGoogle
+			{
 				display: inline-block;
 				margin: 10px 0;
 			}
@@ -108,19 +117,24 @@
 			var fTimeout = 200.0; //seconds after which the search will time out.
 			var fUpdateFrequency = 3000; //milliseconds - the frequency for the repeated check for updates during a search.
 			// Define Mutex class
-			class Mutex {
-				constructor() {
+			class Mutex
+			{
+				constructor()
+				{
 					this.locked = false;
 				}
 
-				async acquire() {
-					while (this.locked) {
-					await new Promise(resolve => setTimeout(resolve, 10));
+				async acquire()
+				{
+					while (this.locked)
+					{
+						await new Promise(resolve => setTimeout(resolve, 10));
 					}
 					this.locked = true;
 				}
 
-				release() {
+				release()
+				{
 					this.locked = false;
 				}
 			}
@@ -144,28 +158,33 @@
 			const output = document.getElementById('output');
 			const submit = document.getElementById('submit');
 
-			input.addEventListener("keydown", function(event) {
-				if (event.key === "Enter") {
+			input.addEventListener("keydown", function(event)
+			{
+				if (event.key === "Enter")
+				{
 					submit.click();
 				}
 			});
 
 			// update the input height on input
-			input.addEventListener('input', () => {
+			input.addEventListener('input', () =>
+			{
 				input.style.height = 'auto';
 				input.style.height = input.scrollHeight + 'px';
 				output.style.height = `calc(100% - ${input.offsetHeight}px - 30px)`;
 			});
 
 			// submit the form on button click
-			submit.addEventListener('click', async () => {
+			submit.addEventListener('click', async () =>
+			{
 				counter = 0;
 				document.getElementById('output').innerText = ">" + document.getElementById('input').value;
 
 				// do something with the input value
 				const message = input.value;
 				const headers = new Headers({ 'Content-Type': 'text/plain' });
-				if (alwaysGoogle.checked) {
+				if (alwaysGoogle.checked)
+				{
 					headers.append('X-Always-Google', 'true');
 				}
 				else
@@ -174,7 +193,8 @@
 				}
 
 				// send the message as a POST request
-				const response = await fetch('/', {
+				const response = await fetch('/',
+				{
 					method: 'POST',
 					headers: headers,
 					body: message
@@ -184,14 +204,16 @@
 				const taskId = response.headers.get('Task_id');
 				
 				// create a function to watch the counter
-				const watchCounter = async () => {
+				const watchCounter = async () =>
+				{
 					// acquire the mutex
 					await mutex.acquire();
 					// increment the counter
 					
 					counter++;
 					// check if the counter has reached the maximum
-					if (counter === parseInt(fTimeout/(fUpdateFrequency/1000))) {
+					if (counter === parseInt(fTimeout/(fUpdateFrequency/1000)))
+					{
 						clearInterval(intervalId);
 						var progressBar = document.getElementById("progress");
 						progressBar.style.width = "0%";
@@ -201,17 +223,21 @@
 					mutex.release();
 				};
 
-				var intervalId = setInterval(function() {
+				var intervalId = setInterval(function()
+				{
 					var xhr = new XMLHttpRequest();
 					xhr.open("GET", "/searches/" + taskId + ".json");
-					xhr.onload = function() {
-					if (xhr.status === 200) {
-						// watch the counter
-						watchCounter();
-						// convert string to JSON
-						var data = JSON.parse(xhr.responseText);
+					xhr.onload = function()
+					{
+						if (xhr.status === 200)
+						{
+							// watch the counter
+							watchCounter();
+							// convert string to JSON
+							var data = JSON.parse(xhr.responseText);
 
-						if (data.hasOwnProperty("answer")) {
+							if (data.hasOwnProperty("answer"))
+							{
 								clearInterval(intervalId);
 								// extract and use the answer value here
 								var answer = data["answer"];
@@ -247,7 +273,8 @@
 								}
 								var progressBar = document.getElementById("progress");
 								progressBar.style.width = "0%";
-							} else if (data.hasOwnProperty("progress"))
+							}
+							else if (data.hasOwnProperty("progress"))
 							{
 								if (counter !== 0)
 								{
@@ -265,6 +292,10 @@
 								console.log("NO PROGRESS. NO FINAL RESULT.")
 							}
 						}
+						else if (xhr.status === 400)
+						{
+                    		console.error("Error 400: " + xhr.responseText);
+                		}
 					};
 					xhr.send();
 				}, fUpdateFrequency);
