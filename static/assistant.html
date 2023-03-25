@@ -162,6 +162,12 @@
 			{
 				if (event.key === "Enter")
 				{
+					if (event.shiftKey)
+					{
+						// Allow line break when Shift is pressed with Enter
+						return;
+					}
+					event.preventDefault(); // Prevent adding a new line
 					submit.click();
 				}
 			});
@@ -177,6 +183,11 @@
 			// submit the form on button click
 			submit.addEventListener('click', async () =>
 			{
+				// If the input value is empty or contains only whitespace, do nothing.
+				/*if (!input.value.trim())
+				{
+					return;
+				}*/
 				counter = 0;
 				document.getElementById('output').innerText = ">" + document.getElementById('input').value;
 
@@ -292,10 +303,14 @@
 								console.log("NO PROGRESS. NO FINAL RESULT.")
 							}
 						}
-					};
-					xhr.onerror = function () {
-						console.error("Request error: " + xhr.status + ": " + xhr.statusText);
-						clearInterval(intervalId);
+						else
+						{
+							// Handle error cases
+							console.error("Request error: " + xhr.status + ": " + xhr.statusText);
+							clearInterval(intervalId);
+							var progressBar = document.getElementById("progress");
+							progressBar.style.width = "0%";
+						}
 					};
 					xhr.send();
 				}, fUpdateFrequency);
