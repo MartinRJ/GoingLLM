@@ -218,7 +218,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
-                if moresearches:
+                if moresearches and not detectNo(moresearches):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
                     more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id)
@@ -240,10 +240,39 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     gc.collect() #Cleanup
 
+def extract_json_object(text):
+    try:
+        json_str = re.search(r'\{.*\}', text).group()
+        return json.loads(json_str)
+    except (AttributeError, json.JSONDecodeError):
+        debuglog("Error in extract_json_object")
+        return None
+
+def detectNo(response):
+    #Checks whether the answer to: "do you need more research" was No
+    try:
+        json_obj = extract_json_object(response)
+        if json_obj is None:
+            raise ValueError("No valid JSON object found in the response.")
+
+        if "action" in json_obj:
+            if isinstance(json_obj["action"], list):
+                if "Nein" in json_obj["action"] or "Nein." in json_obj["action"]:
+                    return True
+                else:
+                    return False
+            else:
+                raise ValueError("The 'action' key is not a list.")
+        else:
+            raise ValueError("The 'action' key is missing from the JSON object.")
+    except ValueError as e:
+        debuglog(f"Error: {e}")
+        return False
+
 def process_more_searchresults_response(response_json, searchresults, usertask, task_id):
     valid_json = False
     try:
-       valid_json = validate_more_searchresults_json(response_json)
+       valid_json = validate_more_searchresults_json(json.loads(response_json))
     except ValueError as e:
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False 
