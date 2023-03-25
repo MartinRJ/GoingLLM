@@ -228,7 +228,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
                     # First clean up
                     searchresults = cleanup(searchresults, usertask)
-                    more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id)
+                    more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
                     if more_searchresults:
                         searchresults.append(more_searchresults)
                 final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
@@ -315,7 +315,7 @@ def detectNo(response):
         debuglog(f"Error: {e}")
         return False
 
-def process_more_searchresults_response(response_json, searchresults, usertask, task_id):
+def process_more_searchresults_response(response_json, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
     valid_json = False
     try:
         json_object = json.loads(response_json)
@@ -324,8 +324,13 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False
     if valid_json:
-        #Calculate remaining tokens.
+        # Calculate remaining tokens
+        string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+        current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
+        remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT
+
         debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
+        debuglog(f"Remaining tokens: {str(remaining_tokens)}")
         #Detect actions
         actions = json_object["action"]
         if "search" in actions:
