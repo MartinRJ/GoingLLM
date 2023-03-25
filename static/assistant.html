@@ -295,6 +295,7 @@
 						else if (xhr.status === 400)
 						{
                     		console.error("Error 400: " + xhr.responseText);
+							clearInterval(intervalId)
                 		}
 					};
 					xhr.send();
