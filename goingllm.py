@@ -218,16 +218,19 @@ def response_task(usertask, task_id, dogoogleoverride):
                 debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
-                if not moresearches:
-                    final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
-                    if final_result == None:
-                        debuglog("Chatcompletions error in generate_final_response_with_search_results")
-                        final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
-                    else:
-                        debuglog("Success with search results")
-                        final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
-                else:
+                if moresearches:
+                    # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
+                    more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id)
+                    if more_searchresults:
+                        searchresults.append(more_searchresults)
+                final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+                if final_result == None:
+                    debuglog("Chatcompletions error in generate_final_response_with_search_results")
+                    final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
+                else:
+                    debuglog("Success with search results")
+                    final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
             debuglog("Keywords are not valid. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
@@ -236,6 +239,78 @@ def response_task(usertask, task_id, dogoogleoverride):
     writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
+
+def process_more_searchresults_response(response_json, searchresults, usertask, task_id):
+    valid_json = False
+    try:
+       valid_json = validate_more_searchresults_json(response_json)
+    except ValueError as e:
+        debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
+        return False 
+    if valid_json:
+        actions = response_json["action"]
+        if "search" in actions:
+            keywords = response_json["keywords"]
+            if keywords:
+                # Perform the search action with the given keywords
+                debuglog(f"Searching for: {keywords}")
+            else:
+                debuglog("No keywords specified. Search is not performed.")
+
+        if "viewDocuments" in actions:
+            documents = response_json["documents"]
+            if documents:
+                # Perform the action to display documents
+                debuglog(f"Display documents: {documents}")
+            else:
+                debuglog("No documents specified. Displaying documents is not performed.")
+
+        if "openLinks" in actions:
+            links = response_json["links"]
+            if links:
+                # Perform the action to open links
+                debuglog(f"Open links: {links}")
+            else:
+                debuglog("No links specified. Opening links is not performed.")
+        #DDDDDDDDDDDDDDDDDEBUG
+        #DDDDDDDDDDDDDDDDDEBUG
+        return False
+    else:
+        debuglog("Other error with moresearches JSON.")
+        return False
+
+def validate_more_searchresults_json(response_json):
+    required_keys = {"action", "keywords", "documents", "links"}
+    action_types = {"search", "viewDocuments", "openLinks"}
+
+    if not isinstance(response_json, dict):
+        raise ValueError("The response JSON object must be a dictionary.")
+
+    missing_keys = required_keys.difference(response_json.keys())
+    if missing_keys:
+        raise ValueError(f"The response JSON object is missing the required keys: {missing_keys}")
+
+    actions = response_json["action"]
+    if not isinstance(actions, list) or not all(isinstance(action, str) for action in actions):
+        raise ValueError("The 'action' list must be a list of strings.")
+
+    for action in actions:
+        if action not in action_types:
+            raise ValueError(f"Invalid action: {action}. Action type must be one of the following: {action_types}")
+
+    keywords = response_json["keywords"]
+    if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
+        raise ValueError("The 'keywords' list must be a list of strings.")
+
+    documents = response_json["documents"]
+    if not isinstance(documents, list) or not all(isinstance(document, int) for document in documents):
+        raise ValueError("The 'documents' list must be a list of integers.")
+
+    links = response_json["links"]
+    if not isinstance(links, list) or not all(isinstance(link, str) for link in links):
+        raise ValueError("The 'left' list must be a list of strings.")
+
+    return True
 
 def do_more_searches(searchresults, usertask, task_id):
     prompt = f"Basierend auf den folgenden Informationen, möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen? Antworten Sie ausschließlich mit entweder \"Nein\" oder mit einem JSON-Objekt.  Möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen, so geben Sie bitte ein JSON-Objekt mit Ihren Anforderungen zurück, das wie folgt formatiert ist: \n{{\"action\": [\"<Aktionstyp1>\", \"<Aktionstyp2>\"], \"keywords\": [\"<Keyword1>\", \"<Keyword2>\", ...], \"documents\": [0, 1, ...], \"links\": [\"<Link1>\", \"<Link2>\", ...]}}\n\nAktionstyp kann entweder \"search\", \"viewDocuments\" oder \"openLinks\" sein. Wenn nein, antworten Sie ausschließlich mit \"Nein\", ohne weitere Erläuterung. Antworten Sie ausschließlich mit entweder einem JSON-Objekt wie angegeben oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {{\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}}).\n\nOriginale Useranfrage: \"{usertask}\"\n\nHier sind die Summaries und die prozentualen Anteile der Textlänge, die für die Zusammenfassung verwendet wurden (der Wert '100' für 'prozent' bedeutet, dass Sie hier bereits sämtliche Informationen sehen - 100% - die von der Seite extrahiert werden konnten, '1' würde bedeuten, dass nur 1% des Dokuments von der angegebenen URL zur Erstellung der Summery herangezogen wurde):\n"
@@ -246,7 +321,7 @@ def do_more_searches(searchresults, usertask, task_id):
     debuglog(f"Response of more search:\n{responsemessage}")
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
-    return None
+    return responsemessage
 
 def generate_final_result_without_search(usertask, task_id, regular):
     #Perform and evaluate final regular request (without searchresults). 'regular' determines whether this was called due to an error (regular=False).
