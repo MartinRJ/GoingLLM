@@ -250,7 +250,7 @@ def response_task(usertask, task_id, dogoogleoverride):
 def cleanup(searchresults, usertask):
     #Ask GPT which searchresults should be kept, the rest will be removed. Returns the original searchresults on error.
     prompt = f"Bitte räume die folgenden Summaries zur Useranfrage >>{usertask}<< auf. Antworte ausschließlich mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden, diejenigen die nicht nötig bzw. hilfreich sind sollen nicht im cleandup-JSON-Objekt aufgelistet werden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden. \n\nHier sind die bisherigen gesammelten Summaries, die für die Beantwortung der Useranfrage gesammelt wurden:\n\n{json.dumps(searchresults)}"
-    system_prompt = "Ich ein persönlicher Assistent für die Internet-Recherche. Ich soll die bisher gesammelten Informationen zu einer bestimmten Useranfrage aufräumen. Ich antworte ausschließlich entweder mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden. Beispiel: {\"cleanedup\": {1,3,4}} Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
+    system_prompt = "Ich bin ein persönlicher Assistent für die Internet-Recherche. Ich soll die bisher gesammelten Informationen zu einer bestimmten Useranfrage aufräumen. Ich antworte ausschließlich entweder mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden. Beispiel: {\"cleanedup\": [1,3,4]} Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_CLEANUP_LENGTH, system_prompt)
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CLEANUP, MAX_TOKENS_CLEANUP_LENGTH)
     if not responsemessage:
@@ -282,7 +282,7 @@ def remove_searchresults(searchresults, keep_json):
 def extract_json_object(text):
     try:
         debuglog(f"extract_json_object - Input text: {text}")
-        json_str = re.search(r'\{.*?\}', text).group()
+        json_str = re.search(r'\{.*\}', text).group()
         return json.loads(json_str)
     except (AttributeError, json.JSONDecodeError):
         debuglog("Error in extract_json_object")
