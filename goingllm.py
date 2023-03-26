@@ -304,10 +304,10 @@ def remove_searchresults(searchresults, keep_json, moresearches):
                 moresearches["documents"] = updated_documents
             return reindexed_searchresults, moresearches
         else:
-            print("remove_searchresults - no \"cleanedup\" object detected")
+            debuglog("remove_searchresults - no \"cleanedup\" object detected")
             return False, moresearches
     except Exception as e:
-        print(f"Error in remove_searchresults: {e}")
+        debuglog(f"Error in remove_searchresults: {e}")
         return False, moresearches
 
 def extract_json_object(text):
