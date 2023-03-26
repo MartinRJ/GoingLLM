@@ -227,7 +227,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
                     # First clean up
-                    searchresults = cleanup(searchresults, usertask)
+                    searchresults, moresearches = cleanup(searchresults, usertask, moresearches)
                     more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
                     if more_searchresults:
                         searchresults.append(more_searchresults)
@@ -247,7 +247,7 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     gc.collect() #Cleanup
 
-def cleanup(searchresults, usertask):
+def cleanup(searchresults, usertask, moresearches):
     #Ask GPT which searchresults should be kept, the rest will be removed. Returns the original searchresults on error.
     prompt = f"Bitte räume die folgenden Summaries zur Useranfrage >>{usertask}<< auf. Antworte ausschließlich mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden, diejenigen die nicht nötig bzw. hilfreich sind sollen nicht im cleandup-JSON-Objekt aufgelistet werden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden. \n\nHier sind die bisherigen gesammelten Summaries, die für die Beantwortung der Useranfrage gesammelt wurden:\n\n{json.dumps(searchresults)}"
     system_prompt = "Ich bin ein persönlicher Assistent für die Internet-Recherche. Ich soll die bisher gesammelten Informationen zu einer bestimmten Useranfrage aufräumen. Ich antworte ausschließlich entweder mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden. Beispiel: {\"cleanedup\": [1,3,4]} Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
@@ -258,31 +258,40 @@ def cleanup(searchresults, usertask):
     debuglog(f"Cleanup. Keep only the following searchresults: {responsemessage}")
     keep_json = extract_json_object(responsemessage)
     if not keep_json:
-        return searchresults
-    new_searchresults = remove_searchresults(searchresults, keep_json)
+        return searchresults, moresearches
+    new_searchresults, new_moresearches = remove_searchresults(searchresults, keep_json, moresearches)
     if not new_searchresults:
-        return searchresults
-    return new_searchresults
+        return searchresults, moresearches
+    return new_searchresults, new_moresearches
 
-def remove_searchresults(searchresults, keep_json):
+def remove_searchresults(searchresults, keep_json, moresearches):
     # Returns a version of searchresults with every entry removed that is not listed in keep_json.
     # If there is no 'cleanup' object in keep_json, or on error, it returns False
+    # Update indices in moresearches
+    new_moresearches = moresearches
     try:
         if "cleanedup" in keep_json:
             cleanedup_indices = set(keep_json["cleanedup"])
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
             # Re-index the cleaned_searchresults
             reindexed_searchresults = []
-            for idx, result in enumerate(cleaned_searchresults):
-                reindexed_searchresults.append({str(idx): result[str(list(result.keys())[0])]})
+            index_map = {} # To map old index to new index
+            for new_idx, old_idx in enumerate(cleanedup_indices):
+                result = searchresults[old_idx]
+                reindexed_searchresults.append({str(new_idx): result[str(old_idx)]})
+                index_map[old_idx] = new_idx
 
-            return reindexed_searchresults
+            # Update new_moresearches' "documents" array
+            updated_documents = [index_map[doc_idx] for doc_idx in new_moresearches["documents"] if doc_idx in index_map]
+            new_moresearches["documents"] = updated_documents
+
+            return reindexed_searchresults, new_moresearches
         else:
             debuglog("remove_searchresults - no \"cleanedup\" object detected")
-            return False
+            return False, moresearches
     except Exception as e:
         debuglog(f"Error in remove_searchresults: {e}")
-        return False
+        return False, moresearches
 
 def extract_json_object(text):
     # Extracts the first JSON object from the given text
@@ -327,7 +336,11 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         # Calculate remaining tokens
         string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
         current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
-        remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT
+        remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
+
+        if remaining_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
+            debuglog(f"Not enough tokens left for another searchresult entry.")
+            return searchresults
 
         debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
         debuglog(f"Remaining tokens: {str(remaining_tokens)}")

@@ -146,27 +146,24 @@ The token-calculation could be off in future models of gpt-3.5-turbo (calculate_
 Usability, Frontend, New Features:  
 • Allow continuing conversations instead of single prompts only: summarize and process chat history.  
 • Provide feedback to users, such as current search terms, URLs, and status.  
-• Allow Shift+Enter.  
 • Adjust the height for tablets.  
 • Implement ChatML if necessary.  
 • Avoid encoded unicode characters in the final output.  
 • Sources!
 
 Backend and enhancing the Backend for a More Intelligent Tool:  
-• Implement threading for speed.
 • Improve error handling for edge-cases and balance all the variables in settings.  
 • Strip unnecessary data/whitespace/formatting from the temporarily downloaded files.  
 • Refine the search flow to make it more intelligent and responsive to user queries.  
 • Allow GPT to determine if it needs more Google results and if it wants to adjust the keywords.  
 • Explain to GPT what the tool is doing and how it works.  
 • Provide source information, i.e. URLs in the final query.  
-• Fallback to alpaca when the OpenAI API is not responding.
+• Fallback to alpaca when the OpenAI API is not responding. (Commercial option required.)
 
 Testing, Bugs and Error Handling:  
 • Test the tool's handling of Powerpoint and plaintext files.  
-• Implement client-side error handling if the .json file does not exist.  
 • Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.  
 • Writing unit tests.
 
 
-I have heavily used ChatGPT and Bing Chat to create this program in less than a day. What a time to be alive!
+I have heavily used ChatGPT and Bing Chat to create the POC of this program in less than a day. What a time to be alive!
