@@ -420,8 +420,8 @@ def validate_more_searchresults_json(response_json):
 
     if "documents" in response_json:
         documents = response_json["documents"]
-        if not isinstance(documents, list) or not all(isinstance(document, int) for document in documents):
-            raise ValueError("The 'documents' list must be a list of integers.")
+        if not isinstance(documents, list) or not all(isinstance(document, str) and document.isdigit() for document in documents):
+            raise ValueError("The 'documents' list must be a list of string-converted integers.")
 
     if "links" in response_json:
         links = response_json["links"]
