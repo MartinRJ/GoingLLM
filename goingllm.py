@@ -278,7 +278,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             index_map = {}
             for new_idx, old_idx in enumerate(cleanedup_indices):
                 result = searchresults[old_idx]
-                reindexed_searchresults.append({str(new_idx): result[str(old_idx)]})
+                reindexed_searchresults.append({str(new_idx): result[old_idx]})  # Fix here
                 index_map[old_idx] = new_idx
 
             updated_documents = [index_map[doc_idx] for doc_idx in new_moresearches["documents"] if doc_idx in index_map]
