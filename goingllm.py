@@ -268,26 +268,24 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # Returns a version of searchresults with every entry removed that is not listed in keep_json.
     # If there is no 'cleanup' object in keep_json, or on error, it returns False
     # Update indices in moresearches
-    new_moresearches = moresearches
     try:
-        debuglog(f"Searchresults: {searchresults}\n-----\nKeep_json: {keep_json}")
         if "cleanedup" in keep_json:
-            cleanedup_indices = set(map(int, keep_json["cleanedup"]))  # Convert the string indices to integers
+            cleanedup_indices = set(map(int, keep_json["cleanedup"]))
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
-            # Re-index the cleaned_searchresults
+
             reindexed_searchresults = []
-            index_map = {}  # To map old index to new index
+            index_map = {}
             for new_idx, old_idx in enumerate(cleanedup_indices):
                 old_key = str(old_idx)
                 result = {key: value for key, value in searchresults[old_idx].items() if key == old_key}
                 reindexed_searchresults.append({str(new_idx): result[old_key]})
                 index_map[old_idx] = new_idx
 
-            # Update new_moresearches' "documents" array
-            updated_documents = [index_map[doc_idx] for doc_idx in new_moresearches["documents"] if doc_idx in index_map]
-            new_moresearches["documents"] = updated_documents
+            # Update the 'documents' list in moresearches
+            updated_documents = [str(index_map[int(doc_idx)]) for doc_idx in moresearches["documents"]]
+            moresearches["documents"] = updated_documents
 
-            return reindexed_searchresults, new_moresearches
+            return reindexed_searchresults, moresearches
         else:
             debuglog("remove_searchresults - no \"cleanedup\" object detected")
             return False, moresearches
