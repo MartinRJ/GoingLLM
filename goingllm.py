@@ -271,9 +271,8 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     new_moresearches = moresearches
     try:
         if "cleanedup" in keep_json:
-            cleanedup_indices = set(map(int, keep_json["cleanedup"]))
+            cleanedup_indices = set(map(int, keep_json["cleanedup"]))  # Convert the string indices to integers
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
-
             # Re-index the cleaned_searchresults
             reindexed_searchresults = []
             index_map = {}  # To map old index to new index
