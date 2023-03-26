@@ -270,6 +270,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # Update indices in moresearches
     new_moresearches = moresearches
     try:
+        debuglog(f"Searchresults: {searchresults}\n-----\nKeep_json: {keep_json}")
         if "cleanedup" in keep_json:
             cleanedup_indices = set(map(int, keep_json["cleanedup"]))  # Convert the string indices to integers
             cleaned_searchresults = [searchresults[i] for i in range(len(searchresults)) if i in cleanedup_indices]
@@ -277,8 +278,9 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             reindexed_searchresults = []
             index_map = {}  # To map old index to new index
             for new_idx, old_idx in enumerate(cleanedup_indices):
-                result = searchresults[old_idx]
-                reindexed_searchresults.append({str(new_idx): result[str(old_idx)]})
+                old_key = str(old_idx)
+                result = {key: value for key, value in searchresults[old_idx].items() if key == old_key}
+                reindexed_searchresults.append({str(new_idx): result[old_key]})
                 index_map[old_idx] = new_idx
 
             # Update new_moresearches' "documents" array
