@@ -265,9 +265,14 @@ def cleanup(searchresults, usertask, moresearches):
     return new_searchresults, new_moresearches
 
 def remove_searchresults(searchresults, keep_json, moresearches):
-    # Returns a version of searchresults with every entry removed that is not listed in keep_json.
-    # If there is no 'cleanup' object in keep_json, or on error, it returns False
-    # Update indices in moresearches
+    # Returns a version of searchresults with every entry removed that is NOT listed in keep_json.
+    # Keep only entries that are listed in keep_json.
+    # If there is no 'cleanup' object in keep_json, or on error, return False.
+    # Update indices in moresearches to reflect the changes in searchresults.
+    # Adds links to moresearches, if an index is removed.
+    if keep_json is None:
+        print("remove_searchresults - invalid keep_json")
+        return False, moresearches
     try:
         if "cleanedup" in keep_json:
             cleanedup_indices = set(map(int, keep_json["cleanedup"]))
@@ -276,21 +281,33 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             reindexed_searchresults = []
             index_map = {}
             for new_idx, old_idx in enumerate(cleanedup_indices):
-                old_key = str(old_idx)
-                result = {key: value for key, value in searchresults[old_idx].items() if key == old_key}
-                reindexed_searchresults.append({str(new_idx): result[old_key]})
-                index_map[old_idx] = new_idx
+                if old_idx < len(searchresults):  # Check if old_idx is within range of searchresults
+                    old_key = str(old_idx)
+                    result = {key: value for key, value in searchresults[old_idx].items() if key == old_key}
+                    reindexed_searchresults.append({str(new_idx): result[old_key]})
+                    index_map[old_idx] = new_idx
 
-            # Update the 'documents' list in moresearches
-            updated_documents = [str(index_map[int(doc_idx)]) for doc_idx in moresearches["documents"]]
-            moresearches["documents"] = updated_documents
-
+            # Update the 'documents' list and 'links' list in moresearches
+            if "documents" in moresearches:
+                updated_documents = []
+                for doc_idx in moresearches["documents"]:
+                    int_doc_idx = int(doc_idx)
+                    if int_doc_idx in index_map:
+                        updated_documents.append(str(index_map[int_doc_idx]))
+                    else:
+                        if int_doc_idx < len(searchresults):  # Check if int_doc_idx is within range of searchresults
+                            if "links" not in moresearches:
+                                moresearches["links"] = []
+                            moresearches["links"].append(searchresults[int_doc_idx][doc_idx]["URL"])
+                            if "openLinks" not in moresearches["action"]:
+                                moresearches["action"].append("openLinks")
+                moresearches["documents"] = updated_documents
             return reindexed_searchresults, moresearches
         else:
-            debuglog("remove_searchresults - no \"cleanedup\" object detected")
+            print("remove_searchresults - no \"cleanedup\" object detected")
             return False, moresearches
     except Exception as e:
-        debuglog(f"Error in remove_searchresults: {e}")
+        print(f"Error in remove_searchresults: {e}")
         return False, moresearches
 
 def extract_json_object(text):
