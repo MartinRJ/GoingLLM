@@ -368,24 +368,30 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
             if keywords:
                 # Perform the search action with the given keywords
                 #debuglog(f"Searching for: {keywords}")
+                pass
             else:
                 #debuglog("No keywords specified. Search is not performed.")
+                pass
 
         if "viewDocuments" in actions:
             documents = json_object["documents"]
             if documents:
                 # Perform the action to display documents
                 #debuglog(f"Display documents: {documents}")
+                pass
             else:
                 #debuglog("No documents specified. Displaying documents is not performed.")
+                pass
 
         if "openLinks" in actions:
             links = json_object["links"]
             if links:
                 # Perform the action to open links
                 #debuglog(f"Open links: {links}")
+                pass
             else:
                 #debuglog("No links specified. Opening links is not performed.")
+                pass
         #DDDDDDDDDDDDDDDDDEBUG
         #DDDDDDDDDDDDDDDDDEBUG
         return False
