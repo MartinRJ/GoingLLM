@@ -271,7 +271,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # Update indices in moresearches to reflect the changes in searchresults.
     # Adds links to moresearches, if an index is removed.
     if keep_json is None:
-        print("remove_searchresults - invalid keep_json")
+        debuglog("remove_searchresults - invalid keep_json")
         return False, moresearches
     try:
         if "cleanedup" in keep_json:
