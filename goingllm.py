@@ -527,25 +527,16 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
         searchresults_list = fix_key_order(searchresults_list)
     return searchresults_list
 
-def fix_key_order(searchresults_dict):
-    # Fix key order of searchresults_list. Because due to the parallel processing, the order of the string-index searchresults_dict[i][str(i)] is not guaranteed.
-    # Iterate through the list with searchresults_dict[i] and put the value of i into each searchresult (searchresults_dict[i][str(i)])
+def fix_key_order(searchresults_list):
+    # Fix key order of searchresults_list. Because due to the parallel processing, the order of the string-index searchresults_list[i][str(i)] is not guaranteed.
+    # Iterate through the list with searchresults_list[i] and put the value of i into each searchresult (searchresults_list[i][str(i)])
     # searchresult has always only one entry (internal convention, for now)
-    searchresults_list = searchresults_dict["searchresults"]
     fixed_searchresults_list = []
-
     for i in range(len(searchresults_list)):
         searchresult = searchresults_list[i]
-        # Get the first (and only) key-value pair in the searchresult
-        key, value = list(searchresult.items())[0]
-        # Replace the key with the correct index (i)
-        fixed_searchresult = {str(i): value}
-        # Append the fixed searchresult to the fixed_searchresults_list
-        fixed_searchresults_list.append(fixed_searchresult)
-
-    # Replace the original searchresults_list with the fixed_searchresults_list
-    searchresults_dict["searchresults"] = fixed_searchresults_list
-    return searchresults_dict
+        new_searchresult = {str(i): searchresult[next(iter(searchresult))]} # Get the first entry of searchresult and change the key to i
+        fixed_searchresults_list.append(new_searchresult)
+    return fixed_searchresults_list
 
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
