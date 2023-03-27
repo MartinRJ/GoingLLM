@@ -351,7 +351,12 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         return False
     if valid_json:
         # Calculate remaining tokens
-        string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+        try:
+            string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+        except TypeError as e:
+            print(f"Error: {e}", flush=True)
+            print(f"searchresults: {searchresults}", flush=True)
+            raise e  # You can either raise the error to stop execution or handle it accordingly
         current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
         remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
 
