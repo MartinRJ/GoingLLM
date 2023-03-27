@@ -1233,7 +1233,7 @@ def process_html_content(soup):
     html = replace_newlines(html)
     return html[:MAX_FILE_CONTENT]
 
-def #debuglog(text, create=False):
+def debuglog(text, create=False):
     try:
         writemode = 'a'
         if create:
