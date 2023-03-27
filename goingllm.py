@@ -252,13 +252,12 @@ def validate_moresearches(response_json):
     # Returns moresearches if valid, else False
     valid_json = False
     try:
-        json_object = json.loads(response_json)
-        valid_json = validate_more_searchresults_json(json_object)
+        valid_json = validate_more_searchresults_json(response_json)
     except ValueError as e:
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False
     if valid_json:
-        return json_object
+        return response_json
     else:
         debuglog("Other error with moresearches JSON.")
         return False
@@ -341,16 +340,6 @@ def check_type(var):
     else:
         return "neither a string, list nor dictionary"
 
-def extract_json_object(text):
-    # Extracts the first JSON object from the given text
-    try:
-        debuglog(f"extract_json_object - Input text: {text}")
-        json_str = re.search(r'\{.*\}', text).group()
-        return json.loads(json_str)
-    except (AttributeError, json.JSONDecodeError):
-        debuglog("Error in extract_json_object")
-        return None
-
 def detectNo(response):
     #Checks whether the answer to: "do you need more research" was No
     try:
@@ -371,6 +360,16 @@ def detectNo(response):
     except ValueError as e:
         debuglog(f"Error: {e}")
         return False
+
+def extract_json_object(text):
+    # Extracts the first JSON object from the given text
+    try:
+        debuglog(f"extract_json_object - Input text: {text}")
+        json_str = re.search(r'\{.*\}', text).group()
+        return json.loads(json_str)
+    except (AttributeError, json.JSONDecodeError):
+        debuglog("Error in extract_json_object")
+        return None
 
 def process_more_searchresults_response(json_object, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
     # Calculate remaining tokens
