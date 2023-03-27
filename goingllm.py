@@ -308,6 +308,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             return False, moresearches
     except Exception as e:
         debuglog(f"Error in remove_searchresults: {e}")
+        debuglog(f"searchresults: {searchresults}, keep_json: {keep_json}, moresearches: {moresearches}")
         return False, moresearches
 
 def extract_json_object(text):
@@ -354,9 +355,9 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         try:
             string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
         except TypeError as e:
-            print(f"Error: {e}", flush=True)
-            print(f"searchresults: {searchresults}", flush=True)
-            raise e  # You can either raise the error to stop execution or handle it accordingly
+            debuglog(f"Error in process_more_searchresults_response: {e}")
+            debuglog(f"searchresults: {searchresults}", flush=True)
+            return searchresults
         current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
         remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
 
@@ -476,9 +477,9 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
     try:
         finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
     except TypeError as e:
-        print(f"Error: {e}", flush=True)
-        print(f"searchresults: {searchresults}", flush=True)
-        raise e  # You can either raise the error to stop execution or handle it accordingly
+        debuglog(f"Error in generate_final_response_with_search_results: {e}")
+        debuglog(f"searchresults: {searchresults}")
+        return None
 
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
