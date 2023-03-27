@@ -223,14 +223,15 @@ def response_task(usertask, task_id, dogoogleoverride):
                 debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
+                valid_moresearches = False
                 try:
                     moresearches = json.loads(moresearches)
-                    moresearches = validate_more_searchresults_json(moresearches)
+                    valid_moresearches = validate_more_searchresults_json(moresearches)
                 except Exception as e:
                     debuglog(f"Error in validating moresearches: {e}")
                     moresearches = None
 
-                if moresearches and not detectNo(moresearches):
+                if moresearches and valid_moresearches and not detectNo(moresearches):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
                     # First clean up
