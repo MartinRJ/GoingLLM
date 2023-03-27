@@ -270,6 +270,24 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # If there is no 'cleanup' object in keep_json, or on error, return False.
     # Update indices in moresearches to reflect the changes in searchresults.
     # Adds links to moresearches, if an index is removed.
+
+    #Debugging
+    def check_type(var):
+        if isinstance(var, str):
+            return "string"
+        elif isinstance(var, list):
+            return "list"
+        elif isinstance(var, dict):
+            return "dictionary"
+        else:
+            return "neither a string, list nor dictionary"
+
+    searchresults_type = check_type(searchresults)
+    keep_json_type = check_type(keep_json)
+    moresearches_type = check_type(moresearches)
+    debug_string = f"searchresults is a {searchresults_type}, keep_json is a {keep_json_type}, moresearches is {moresearches_type}"
+    #End debugging
+
     if keep_json is None:
         debuglog("remove_searchresults - invalid keep_json")
         return False, moresearches
@@ -308,7 +326,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             return False, moresearches
     except Exception as e:
         debuglog(f"Error in remove_searchresults: {e}")
-        debuglog(f"searchresults: {searchresults}, keep_json: {keep_json}, moresearches: {moresearches}")
+        debuglog(f"searchresults: {searchresults}, keep_json: {keep_json}, moresearches: {moresearches}, types: {debug_string}")
         return False, moresearches
 
 def extract_json_object(text):
