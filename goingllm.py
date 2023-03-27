@@ -223,6 +223,7 @@ def response_task(usertask, task_id, dogoogleoverride):
                 debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
+                moresearches = validate_moresearches(moresearches)
                 if moresearches and not detectNo(moresearches):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
@@ -247,6 +248,21 @@ def response_task(usertask, task_id, dogoogleoverride):
 
     gc.collect() #Cleanup
 
+def validate_moresearches(response_json):
+    # Returns moresearches if valid, else False
+    valid_json = False
+    try:
+        json_object = json.loads(response_json)
+        valid_json = validate_more_searchresults_json(json_object)
+    except ValueError as e:
+        debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
+        return False
+    if valid_json:
+        return response_json
+    else:
+        debuglog("Other error with moresearches JSON.")
+        return False
+
 def cleanup(searchresults, usertask, moresearches):
     #Ask GPT which searchresults should be kept, the rest will be removed. Returns the original searchresults on error.
     prompt = f"Bitte räume die folgenden Summaries zur Useranfrage >>{usertask}<< auf. Antworte ausschließlich mit einem JSON-Objekt mit dem Objekt \"cleanedup\", welches die Indexe derjenigen Resultate beinhaltet, die für die finale anschließende Beantwortung der Frage benötigt werden, diejenigen die nicht nötig bzw. hilfreich sind sollen nicht im cleandup-JSON-Objekt aufgelistet werden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden. \n\nHier sind die bisherigen gesammelten Summaries, die für die Beantwortung der Useranfrage gesammelt wurden:\n\n{json.dumps(searchresults)}"
@@ -270,23 +286,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # If there is no 'cleanup' object in keep_json, or on error, return False.
     # Update indices in moresearches to reflect the changes in searchresults.
     # Adds links to moresearches, if an index is removed.
-
-    #Debugging
-    def check_type(var):
-        if isinstance(var, str):
-            return "string"
-        elif isinstance(var, list):
-            return "list"
-        elif isinstance(var, dict):
-            return "dictionary"
-        else:
-            return "neither a string, list nor dictionary"
-
-    searchresults_type = check_type(searchresults)
-    keep_json_type = check_type(keep_json)
-    moresearches_type = check_type(moresearches)
-    debug_string = f"searchresults is a {searchresults_type}, keep_json is a {keep_json_type}, moresearches is {moresearches_type}"
-    #End debugging
+    # moresearches must be already validated.
 
     if keep_json is None:
         debuglog("remove_searchresults - invalid keep_json")
@@ -326,8 +326,20 @@ def remove_searchresults(searchresults, keep_json, moresearches):
             return False, moresearches
     except Exception as e:
         debuglog(f"Error in remove_searchresults: {e}")
-        debuglog(f"searchresults: {searchresults}, keep_json: {keep_json}, moresearches: {moresearches}, types: {debug_string}")
+        debuglog(f"searchresults: {searchresults}, keep_json: {keep_json}, moresearches: {moresearches}")
         return False, moresearches
+
+def check_type(var):
+    # For debug purposes, use like this:
+    # var_type = check_type(var)
+    if isinstance(var, str):
+        return "string"
+    elif isinstance(var, list):
+        return "list"
+    elif isinstance(var, dict):
+        return "dictionary"
+    else:
+        return "neither a string, list nor dictionary"
 
 def extract_json_object(text):
     # Extracts the first JSON object from the given text
@@ -360,68 +372,57 @@ def detectNo(response):
         debuglog(f"Error: {e}")
         return False
 
-def process_more_searchresults_response(response_json, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    valid_json = False
+def process_more_searchresults_response(json_object, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+    # Calculate remaining tokens
     try:
-        json_object = json.loads(response_json)
-        valid_json = validate_more_searchresults_json(json_object)
-    except ValueError as e:
-        debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
-        return False
-    if valid_json:
-        # Calculate remaining tokens
-        try:
-            string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
-        except TypeError as e:
-            debuglog(f"Error in process_more_searchresults_response: {e}")
-            debuglog(f"searchresults: {searchresults}", flush=True)
-            return searchresults
-        current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
-        remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
+        string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    except TypeError as e:
+        debuglog(f"Error in process_more_searchresults_response: {e}")
+        debuglog(f"searchresults: {searchresults}", flush=True)
+        return searchresults
+    current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
+    remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
 
-        if remaining_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-            debuglog(f"Not enough tokens left for another searchresult entry.")
-            return searchresults
+    if remaining_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
+        debuglog(f"Not enough tokens left for another searchresult entry.")
+        return searchresults
 
-        debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
-        debuglog(f"Remaining tokens: {str(remaining_tokens)}")
-        #Detect actions
-        actions = json_object["action"]
-        if "search" in actions:
-            keywords = json_object["keywords"]
-            if keywords:
-                # Perform the search action with the given keywords
-                debuglog(f"Searching for: {keywords}")
-                pass
-            else:
-                debuglog("No keywords specified. Search is not performed.")
-                pass
+    debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
+    debuglog(f"Remaining tokens: {str(remaining_tokens)}")
+    #Detect actions
+    actions = json_object["action"]
+    if "search" in actions:
+        keywords = json_object["keywords"]
+        if keywords:
+            # Perform the search action with the given keywords
+            debuglog(f"Searching for: {keywords}")
+            pass
+        else:
+            debuglog("No keywords specified. Search is not performed.")
+            pass
 
-        if "viewDocuments" in actions:
-            documents = json_object["documents"]
-            if documents:
-                # Perform the action to display documents
-                debuglog(f"Display documents: {documents}")
-                pass
-            else:
-                debuglog("No documents specified. Displaying documents is not performed.")
-                pass
+    if "viewDocuments" in actions:
+        documents = json_object["documents"]
+        if documents:
+            # Perform the action to display documents
+            debuglog(f"Display documents: {documents}")
+            pass
+        else:
+            debuglog("No documents specified. Displaying documents is not performed.")
+            pass
 
-        if "openLinks" in actions:
-            links = json_object["links"]
-            if links:
-                # Perform the action to open links
-                debuglog(f"Open links: {links}")
-                pass
-            else:
-                debuglog("No links specified. Opening links is not performed.")
-                pass
-        #DDDDDDDDDDDDDDDDDEBUG
-        #DDDDDDDDDDDDDDDDDEBUG
-        return False
-    else:
-        debuglog("Other error with moresearches JSON.")
-        return False
+    if "openLinks" in actions:
+        links = json_object["links"]
+        if links:
+            # Perform the action to open links
+            debuglog(f"Open links: {links}")
+            pass
+        else:
+            debuglog("No links specified. Opening links is not performed.")
+            pass
+    #DDDDDDDDDDDDDDDDDEBUG
+    #DDDDDDDDDDDDDDDDDEBUG
+    return False
 
 def validate_more_searchresults_json(response_json):
     action_types = {"search", "viewDocuments", "openLinks"}
