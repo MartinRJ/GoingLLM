@@ -258,7 +258,7 @@ def validate_moresearches(response_json):
         debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False
     if valid_json:
-        return response_json
+        return json_object
     else:
         debuglog("Other error with moresearches JSON.")
         return False
