@@ -365,12 +365,15 @@ def extract_json_object(text):
 
 def process_more_searchresults_response(json_object, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
     # Calculate remaining tokens
+    # Format of the json_object: {"action": ["<Action type 1>", "<Action type 2>"], "keywords": ["<Keyword1>", "<Keyword2>", ...], "documents": ["0", "1", ...], "links": ["<Link1>", "<Link2>", ...]}
+    # Action types: "search", "viewDocuments", "openLinks". One action type minimum. Everything else is optional. If "search" is present, the "keywords" key with value(s) must be present. If "viewDocuments" is present, the "documents" key with value(s) must be present. If "openLinks" is present, the "links" key with value(s) must be present.
     try:
         string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
     except TypeError as e:
         debuglog(f"Error in process_more_searchresults_response: {e}")
         debuglog(f"searchresults: {searchresults}", flush=True)
         return searchresults
+    added = False
     current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
     remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
 
@@ -387,7 +390,20 @@ def process_more_searchresults_response(json_object, searchresults, usertask, ta
         if keywords:
             # Perform the search action with the given keywords
             debuglog(f"Searching for: {keywords}")
-            pass
+            new_searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+            if new_searchresults == None or not new_searchresults:
+                if new_searchresults == None:
+                    debuglog("Chatcompletions error in process_keywords_and_search")
+                    pass
+                else:
+                    debuglog("Searchresults are empty. Generating final response without search results.")
+                    pass
+            else:
+                if isinstance(more_searchresults):
+                    more_searchresults.append(new_searchresults)
+                else:
+                    more_searchresults = new_searchresults
+                    added = True
         else:
             debuglog("No keywords specified. Search is not performed.")
             pass
@@ -411,9 +427,11 @@ def process_more_searchresults_response(json_object, searchresults, usertask, ta
         else:
             debuglog("No links specified. Opening links is not performed.")
             pass
-    #DDDDDDDDDDDDDDDDDEBUG
-    #DDDDDDDDDDDDDDDDDEBUG
-    return False
+
+    if added:
+        return more_searchresults
+    else:
+        return False
 
 def validate_more_searchresults_json(response_json):
     action_types = {"search", "viewDocuments", "openLinks"}
