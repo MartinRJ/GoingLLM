@@ -522,6 +522,7 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
         for process in processes:
             process.join()
         # Convert searchresults to a regular list inside the with block
+        debuglog(f"Here is the collection of searchresults BEFORE converting into a list and fixing indexes: {searchresults}")
         searchresults_list = list(searchresults)
         searchresults_list = fix_key_order(searchresults_list)
     return searchresults_list
