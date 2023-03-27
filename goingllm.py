@@ -91,13 +91,13 @@ def startup():
         if not body:
             raise ValueError('Empty body')
     except Exception as e:
-        debuglog("There was an error with the input.")
+        #debuglog("There was an error with the input.")
         return f'Error extracting body: {e}', 400
 
     if len(body) > BODY_MAX_LENGTH:
         task_id = str(uuid4())
         errormessage = "Input is too long."
-        debuglog(errormessage)
+        #debuglog(errormessage)
         writefile(FINAL_RESULT_CODE_ERROR_INPUT, errormessage, task_id)
         response = make_response('', 200)
         response.headers['task_id'] = task_id
@@ -111,7 +111,7 @@ def startup():
 
         #create new JSON output file with status 'started' and send a 200 response, and start the actual tasks.
         task_id = str(uuid4())
-        debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
+        #debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile("0", False, task_id)
         response = make_response('', 200)
@@ -191,36 +191,36 @@ def response_task(usertask, task_id, dogoogleoverride):
     final_result_code = ""
     if dogooglesearch == None or not dogooglesearch:
             if dogooglesearch == None:
-                debuglog("Chatcompletions error in should_perform_google_search")
+                #debuglog("Chatcompletions error in should_perform_google_search")
                 pass
             else:
-                debuglog("No Google search necessary. Generating final response without search results.")
+                #debuglog("No Google search necessary. Generating final response without search results.")
                 pass
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, False)
     elif dogooglesearch:
-        debuglog("With Google-search, generating keywords.")
+        #debuglog("With Google-search, generating keywords.")
         keywords = generate_keywords(usertask, task_id)
         if keywords == None or not keywords:
             if keywords == None:
-                debuglog("Chatcompletions error in generate_keywords")
+                #debuglog("Chatcompletions error in generate_keywords")
                 pass
             else:
-                debuglog("No search terms. Generating final response without search results.")
+                #debuglog("No search terms. Generating final response without search results.")
                 pass
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
         elif valid_keywords(keywords):
-            debuglog("Keywords are valid, starting search.")
+            #debuglog("Keywords are valid, starting search.")
             searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
             if searchresults == None or not searchresults:
                 if searchresults == None:
-                    debuglog("Chatcompletions error in process_keywords_and_search")
+                    #debuglog("Chatcompletions error in process_keywords_and_search")
                     pass
                 else:
-                    debuglog("Searchresults are empty. Generating final response without search results.")
+                    #debuglog("Searchresults are empty. Generating final response without search results.")
                     pass
                 final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
             else:
-                debuglog("Got search results, generating final results.")
+                #debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
                 if moresearches and not detectNo(moresearches):
@@ -233,13 +233,13 @@ def response_task(usertask, task_id, dogoogleoverride):
                         searchresults.append(more_searchresults)
                 final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
                 if final_result == None:
-                    debuglog("Chatcompletions error in generate_final_response_with_search_results")
+                    #debuglog("Chatcompletions error in generate_final_response_with_search_results")
                     final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
                 else:
-                    debuglog("Success with search results")
+                    #debuglog("Success with search results")
                     final_result_code = FINAL_RESULT_CODE_SUCCESS_WITH_CUSTOMSEARCH
         else:
-            debuglog("Keywords are not valid. Generating final response without search results.")
+            #debuglog("Keywords are not valid. Generating final response without search results.")
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
 
     #html = markdown.markdown(responsemessage)
@@ -255,7 +255,7 @@ def cleanup(searchresults, usertask, moresearches):
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_CLEANUP, MAX_TOKENS_CLEANUP_LENGTH)
     if not responsemessage:
         return searchresults # (Fatal) error in chatcompletion, return original searchresults
-    debuglog(f"Cleanup. Keep only the following searchresults: {responsemessage}")
+    #debuglog(f"Cleanup. Keep only the following searchresults: {responsemessage}")
     keep_json = extract_json_object(responsemessage)
     if not keep_json:
         return searchresults, moresearches
@@ -271,7 +271,7 @@ def remove_searchresults(searchresults, keep_json, moresearches):
     # Update indices in moresearches to reflect the changes in searchresults.
     # Adds links to moresearches, if an index is removed.
     if keep_json is None:
-        debuglog("remove_searchresults - invalid keep_json")
+        #debuglog("remove_searchresults - invalid keep_json")
         return False, moresearches
     try:
         if "cleanedup" in keep_json:
@@ -304,20 +304,20 @@ def remove_searchresults(searchresults, keep_json, moresearches):
                 moresearches["documents"] = updated_documents
             return reindexed_searchresults, moresearches
         else:
-            debuglog("remove_searchresults - no \"cleanedup\" object detected")
+            #debuglog("remove_searchresults - no \"cleanedup\" object detected")
             return False, moresearches
     except Exception as e:
-        debuglog(f"Error in remove_searchresults: {e}")
+        #debuglog(f"Error in remove_searchresults: {e}")
         return False, moresearches
 
 def extract_json_object(text):
     # Extracts the first JSON object from the given text
     try:
-        debuglog(f"extract_json_object - Input text: {text}")
+        #debuglog(f"extract_json_object - Input text: {text}")
         json_str = re.search(r'\{.*\}', text).group()
         return json.loads(json_str)
     except (AttributeError, json.JSONDecodeError):
-        debuglog("Error in extract_json_object")
+        #debuglog("Error in extract_json_object")
         return None
 
 def detectNo(response):
@@ -338,7 +338,7 @@ def detectNo(response):
         else:
             raise ValueError("The 'action' key is missing from the JSON object.")
     except ValueError as e:
-        debuglog(f"Error: {e}")
+        #debuglog(f"Error: {e}")
         return False
 
 def process_more_searchresults_response(response_json, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
@@ -347,7 +347,7 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         json_object = json.loads(response_json)
         valid_json = validate_more_searchresults_json(json_object)
     except ValueError as e:
-        debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
+        #debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
         return False
     if valid_json:
         # Calculate remaining tokens
@@ -356,41 +356,41 @@ def process_more_searchresults_response(response_json, searchresults, usertask, 
         remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
 
         if remaining_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-            debuglog(f"Not enough tokens left for another searchresult entry.")
+            #debuglog(f"Not enough tokens left for another searchresult entry.")
             return searchresults
 
-        debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
-        debuglog(f"Remaining tokens: {str(remaining_tokens)}")
+        #debuglog(f"More searches, previous (cleaned-up) results are: {searchresults}")
+        #debuglog(f"Remaining tokens: {str(remaining_tokens)}")
         #Detect actions
         actions = json_object["action"]
         if "search" in actions:
             keywords = json_object["keywords"]
             if keywords:
                 # Perform the search action with the given keywords
-                debuglog(f"Searching for: {keywords}")
+                #debuglog(f"Searching for: {keywords}")
             else:
-                debuglog("No keywords specified. Search is not performed.")
+                #debuglog("No keywords specified. Search is not performed.")
 
         if "viewDocuments" in actions:
             documents = json_object["documents"]
             if documents:
                 # Perform the action to display documents
-                debuglog(f"Display documents: {documents}")
+                #debuglog(f"Display documents: {documents}")
             else:
-                debuglog("No documents specified. Displaying documents is not performed.")
+                #debuglog("No documents specified. Displaying documents is not performed.")
 
         if "openLinks" in actions:
             links = json_object["links"]
             if links:
                 # Perform the action to open links
-                debuglog(f"Open links: {links}")
+                #debuglog(f"Open links: {links}")
             else:
-                debuglog("No links specified. Opening links is not performed.")
+                #debuglog("No links specified. Opening links is not performed.")
         #DDDDDDDDDDDDDDDDDEBUG
         #DDDDDDDDDDDDDDDDDEBUG
         return False
     else:
-        debuglog("Other error with moresearches JSON.")
+        #debuglog("Other error with moresearches JSON.")
         return False
 
 def validate_more_searchresults_json(response_json):
@@ -433,10 +433,10 @@ def validate_more_searchresults_json(response_json):
 def do_more_searches(searchresults, usertask, task_id):
     prompt = f"Basierend auf den folgenden Informationen, möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen? Antworten Sie ausschließlich mit entweder \"Nein\" oder mit einem JSON-Objekt.  Möchten Sie noch weitere Keywords googeln, mehr von den bereits durchsuchten Dokumenten sehen oder noch andere Links direkt aufrufen, so geben Sie bitte ein JSON-Objekt mit Ihren Anforderungen zurück, das wie folgt formatiert ist: \n{{\"action\": [\"<Aktionstyp1>\", \"<Aktionstyp2>\"], \"keywords\": [\"<Keyword1>\", \"<Keyword2>\", ...], \"documents\": [\"0\", \"1\", ...], \"links\": [\"<Link1>\", \"<Link2>\", ...]}}\n\nAktionstyp kann entweder \"search\", \"viewDocuments\" oder \"openLinks\" sein. Wenn nein, antworten Sie ausschließlich mit \"Nein\", ohne weitere Erläuterung. Antworten Sie ausschließlich mit entweder einem JSON-Objekt wie angegeben oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {{\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}}).\n\nOriginale Useranfrage: \"{usertask}\"\n\nHier sind die Summaries und die prozentualen Anteile der Tokens, die für die Erstellung der Zusammenfassungen jeweils verwendet wurden. Der angegebene Prozent-Wert gibt an wie viel Token anteilsmäßig für die Erstellung der jeweiligen Summary verwendet wurden:\n"
     system_prompt = "Ich ein persönlicher Assistent für die Internet-Recherche. Ich soll entscheiden, ob zur Bearbeitung einer bestimmten Useranfrage noch zusätzliche Google-Recherchen oder Web-Crawls nötig sind, oder ob die bisher gesammelten Informationen in Kombination mit den Daten aus meinen internen Datenbanken ausreichen. Ich antworte ausschließlich entweder mit einem JSON-Objekt oder mit \"Nein\" als Element der \"action\"-Liste im JSON-Objekt (z. B. {\"action\": [\"Nein\"], \"keywords\": [], \"documents\": [], \"links\": []}), falls die Informationen (die ich selbst in einer Anfrage zuvor als Summary zusammengefasst habe) ausreichen. Das JSON-Objekt soll folgendes Format haben (Beispiel): \"{\"action\": [\"<meine auswahl - optional>\" oder \"Nein\",\"<meine auswahl - optional>\",\"<meine auswahl - optional>\"], \"keywords\": [\"<optional - keywords>\"], \"documents\": [\"<optional - index des Dokuments>\"], \"links\": [\"<optional - Direktlinks>\"]}\". Ich antworte in jedem Fall ohne weitere Erklärung oder Kommentar. Der User sieht meine Antwort nicht, sie wird nur von einem Skript weiterverarbeitet, um dem User im späteren Programmablauf die zusammengefassten Ergebnisse der Recherchen präsentieren zu können."
-    debuglog(f"Searching with searchresults:\n{json.dumps(searchresults)}")
+    #debuglog(f"Searching with searchresults:\n{json.dumps(searchresults)}")
     prompt = truncate_string_to_tokens(f"{prompt}{json.dumps(searchresults)}", MAX_TOKENS_MORE_SEARCHES_LENGTH, system_prompt)
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_MORE_SEARCHES, MAX_TOKENS_MORE_SEARCHES_LENGTH)
-    debuglog(f"Response of more search:\n{responsemessage}")
+    #debuglog(f"Response of more search:\n{responsemessage}")
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     return responsemessage
@@ -445,10 +445,10 @@ def generate_final_result_without_search(usertask, task_id, regular):
     #Perform and evaluate final regular request (without searchresults). 'regular' determines whether this was called due to an error (regular=False).
     final_result = generate_final_response_without_search_results(usertask, task_id, regular)
     if final_result == None:
-        debuglog("Chatcompletions error in generate_final_response_without_search_results")
+        #debuglog("Chatcompletions error in generate_final_response_without_search_results")
         final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
     else:
-        debuglog("Success without search results")
+        #debuglog("Success without search results")
         final_result_code = FINAL_RESULT_CODE_SUCCESS_WITHOUT_CUSTOMSEARCH
     return final_result, final_result_code
 
@@ -464,7 +464,7 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
     finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
 
-    #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
+    ##debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
     final_result = chatcompletion_with_timeout(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
@@ -492,7 +492,7 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
 
 def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
-    debuglog(f"Search Google result contains the following data: {json.dumps(search_google_result)}") #debug
+    #debuglog(f"Search Google result contains the following data: {json.dumps(search_google_result)}") #debug
     if search_google_result is None:
         search_google_result = {"searchresults":[]} # Create a new empty list, if it was empty.
 
@@ -505,7 +505,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         urls = ["https://" + url if not url.startswith("https://") else url for url in urls]
 
         for url in urls:
-            debuglog(f"URL detected in original request: {url}") #debug
+            #debuglog(f"URL detected in original request: {url}") #debug
             url_exists = False
 
             # Add the URL to google_result if it doesn't already exist
@@ -530,15 +530,15 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
                 }
                 search_google_result["searchresults"].append(new_entry)
 
-    debuglog(f"Search Google result contains the following data after adding manual URLs from the user prompt: {json.dumps(search_google_result)}") #debug
+    #debuglog(f"Search Google result contains the following data after adding manual URLs from the user prompt: {json.dumps(search_google_result)}") #debug
     if len(search_google_result["searchresults"]) < 1: #Skip if nothing was found or there was an error in search
         # The function has returned an error
-        debuglog("Nothing was found or there was an error in the search.")
+        #debuglog("Nothing was found or there was an error in the search.")
         return
     for search_result in search_google_result['searchresults']:
         for key, value in search_result.items():
             url = value['url']
-            debuglog(f"Adding to google_result: {url}")
+            #debuglog(f"Adding to google_result: {url}")
             # Add the URL to google_result if it doesn't already exist
             if url not in google_result:
                 google_result.append(url)
@@ -548,17 +548,17 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
     prompt = f"Bitte wähle die Reihenfolge der vielversprechendsten Google-Ergebnisse aus der folgenden Liste aus die für dich - würden dir die Inhalte der jeweiligen URL zur Verfügung gestellt - zur Beantwortung der Aufgabe >>{usertask}<< am nützlichsten sein könnten, und gebe sie als JSON-Objekt mit dem Objekt \"weighting\", das index, und einen \"weight\" Wert enthält zurück, der die geschätzte Gewichtung der Relevanz angibt; In Summe soll das den Wert 1 ergeben. Ergebnisse die für die Aufgabe keine Relevanz versprechen, kannst du aus dem resultierenden JSON-Objekt entfernen: \n\n{json.dumps(search_google_result)}\n\nBeispiel-Antwort: {{\"weighting\": {{\"3\":0.6,\"0\":0.2,\"1\":0.1,\"2\":0.1}}}}. Schreibe keine Begründung, sondern antworte nur mit dem JSON-Objekt."
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und antworte immer mit JSON-Objekten mit dem Key \"weighting\". Beispiel: {\"weighting\": {\"2\":0.6,\"0\":0.3,\"1\":0.1}}"
-    #debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    ##debuglog(f"Page content - untruncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
     prompt = truncate_string_to_tokens(prompt, MAX_TOKENS_SELECT_SEARCHES_LENGTH, system_prompt)
-    #debuglog(f"Page content - truncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    ##debuglog(f"Page content - truncated, prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_SELECT_SEARCHES, MAX_TOKENS_SELECT_SEARCHES_LENGTH)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     weighting = extract_json(responsemessage, "weighting")
 
-    debuglog(f"weighting content: {json.dumps(weighting)}")
-    debuglog(f"search_google_result content: {json.dumps(search_google_result)}")
-    debuglog(f"google_result content: {json.dumps(google_result)}")
+    #debuglog(f"weighting content: {json.dumps(weighting)}")
+    #debuglog(f"search_google_result content: {json.dumps(search_google_result)}")
+    #debuglog(f"google_result content: {json.dumps(google_result)}")
     if weighting:
         # the function returned a dictionary, re-sort
         sorted_weighting = sorted(weighting.items(), key=lambda x: x[1], reverse=True)
@@ -569,7 +569,7 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
             gpturls[index] = search_google_result['searchresults'][int(index)][index]['url']
     else:
         # the function returned False, resume unaltered
-        debuglog("No results of initial sort.")
+        #debuglog("No results of initial sort.")
         pass #do nothing
 
     processes = []
@@ -600,11 +600,11 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
 
 def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weighting, gpturls, keyword, usertask, searchresults, URL, task_id):
     #Download file and create a summary, and append to searchresults
-    debuglog(f"Here are the URLs: {URL}")
+    #debuglog(f"Here are the URLs: {URL}")
     dlfile = extract_content(URL)
     if not dlfile:
         responsemessage = "Error"
-        debuglog(f"Error summarizing URL content: {URL}")
+        #debuglog(f"Error summarizing URL content: {URL}")
         return
     responsemessage = dlfile
 
@@ -615,7 +615,7 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
             f"die URL oder Webseite wenn sie relevant ist.\n\nVon URL: {URL}\nKeyword: \"{keyword}\"\nInhalt:\n{responsemessage}")
     system_prompt = "Ich bin dein persönlicher Assistent für die Internetrecherche und erstelle präzise Zusammenfassungen von Webseiteninhalten aus Google-Suchergebnissen. Dabei extrahiere ich relevante Informationen und Spezifika, die zur Beantwortung der gestellten Anfrage erforderlich sind und nicht in meinen internen Datenbanken vorhanden sind. Ich erwähne auch die URL oder Webseite, wenn sie relevant ist."
 
-    debuglog(f"Page content - untruncated, prompt: \"{prompt[:1000]}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    #debuglog(f"Page content - untruncated, prompt: \"{prompt[:1000]}\", system_prompt: \"{system_prompt}\"") #----Debug Output
 
     weighting_value = False
     if gpturls:
@@ -631,10 +631,10 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
     if weighting_value and weighting_value > 0 and len(gpturls) > 0:
         calc_tokens = int(MAX_TOKENS_SUMMARIZE_RESULT * len(gpturls) * weighting_value)
         if calc_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
-            debuglog(f"Error - not enough tokens left for summary of URL content with weighting: {URL}")
+            #debuglog(f"Error - not enough tokens left for summary of URL content with weighting: {URL}")
             return;
         max_tokens_completion_summarize = calc_tokens
-        debuglog(f"Weighting applied: {str(weighting_value)} weight => {str(max_tokens_completion_summarize)} tokens")
+        #debuglog(f"Weighting applied: {str(weighting_value)} weight => {str(max_tokens_completion_summarize)} tokens")
         if max_tokens_completion_summarize < 1:
             max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
@@ -646,16 +646,16 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
 
     sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
-        debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
+        #debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
         max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
         if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-            debuglog(f"Not enough tokens after decreasing, for: {URL}")
+            #debuglog(f"Not enough tokens after decreasing, for: {URL}")
             return # Not enough tokens
     if max_tokens_completion_summarize < 1:
-        debuglog(f"Error - no tokens left for summary of URL content: {URL}")
+        #debuglog(f"Error - no tokens left for summary of URL content: {URL}")
         return
     if max_tokens_completion_summarize < MIN_TOKENS_SUMMARIZE_RESULT:
-        debuglog(f"Error - not enough tokens left for summary of URL content: {URL}")
+        #debuglog(f"Error - not enough tokens left for summary of URL content: {URL}")
         return
     prompt = truncate_string_to_tokens(prompt, max_tokens_completion_summarize, system_prompt)
 
@@ -663,9 +663,9 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
     responsemessage = truncate_at_last_period_or_newline(responsemessage) #Make sure responsemessage ends with . or newline, otherwise GPT tends to attempt to finish the sentence.
-    #debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
-    #debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
-    debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
+    ##debuglog(f"Page content: prompt: \"{prompt}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    ##debuglog(f"Page content: result: \"{responsemessage}\", system_prompt: \"{system_prompt}\"") #----Debug Output
+    #debuglog(f"Appending to searchresults for URL {URL}: {responsemessage}")
     index = len(searchresults)
     weight = weighting_value
     if not weighting_value:
@@ -685,16 +685,16 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
         }
     }
     searchresults.append(searchresult)
-    debuglog(f"Appending successful.")
+    #debuglog(f"Appending successful.")
 
 def valid_keywords(keywords):
     if not keywords:
-        debuglog("valid_keywords: (Fatal) error in chat completion")
+        #debuglog("valid_keywords: (Fatal) error in chat completion")
         return False # (Fatal) error in chatcompletion
     elif all(isinstance(item, str) for item in keywords):
         return True
     else:
-        debuglog(f"Not all entries in the keyword-array are strings. Cannot use the results: {json.dumps(keywords)}")
+        #debuglog(f"Not all entries in the keyword-array are strings. Cannot use the results: {json.dumps(keywords)}")
         return False
 
 def generate_keywords(usertask, task_id):
@@ -737,7 +737,7 @@ def should_perform_google_search(usertask, dogoogleoverride, task_id):
     responsemessage = chatcompletion_with_timeout(system_prompt, prompt, TEMPERATURE_DECISION_TO_GOOGLE, MAX_TOKENS_DECISION_TO_GOOGLE)
     if not responsemessage:
         return None # (Fatal) error in chatcompletion
-    debuglog(f"Does ChatGPT require a Google-Search: {responsemessage}")
+    #debuglog(f"Does ChatGPT require a Google-Search: {responsemessage}")
     dogooglesearch = yes_or_no(responsemessage)
     return dogooglesearch
 
@@ -758,11 +758,11 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
                 {"role": "user", "content": prompt}
             ]
         )
-        debuglog(f"Query completed. Usage = prompt_tokens: {str(response['usage']['prompt_tokens'])}, completion_tokens: {str(response['usage']['completion_tokens'])}, total_tokens: {str(response['usage']['total_tokens'])}\n\nPrompt:\n{prompt[:1000]}")
+        #debuglog(f"Query completed. Usage = prompt_tokens: {str(response['usage']['prompt_tokens'])}, completion_tokens: {str(response['usage']['completion_tokens'])}, total_tokens: {str(response['usage']['total_tokens'])}\n\nPrompt:\n{prompt[:1000]}")
         return response['choices'][0]['message']['content']
     except Exception as e:
         Errormessage = f"Error occured in chatcompletion: {e}"
-        debuglog(Errormessage)
+        #debuglog(Errormessage)
         return False
 
 def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
@@ -774,11 +774,11 @@ def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, co
             return response
         except concurrent.futures.TimeoutError:
             Errormessage = f"Error: chatcompletion timed out after {timeout} seconds"
-            debuglog(Errormessage)
+            #debuglog(Errormessage)
             return False
         except Exception as e:
             Errormessage = f"Error occured in chatcompletion_with_timeout: {e}"
-            debuglog(Errormessage)
+            #debuglog(Errormessage)
             return False
 
 def truncate_at_last_period_or_newline(text):
@@ -804,11 +804,11 @@ def truncate_at_last_period_or_newline(text):
             nlp = spacy.load(model_name) # Load the model
         except:
             try:
-                debuglog(f"Model not downloaded, downloading {model_name}")
+                #debuglog(f"Model not downloaded, downloading {model_name}")
                 spacy.cli.download(model_name) # download the models automatically if they are not present
                 nlp = spacy.load(model_name) # Load the model
             except:
-                debuglog(f"Could not download and load model {model_name}")
+                #debuglog(f"Could not download and load model {model_name}")
                 return truncate_legacy(text)
 
         try:
@@ -818,11 +818,11 @@ def truncate_at_last_period_or_newline(text):
             truncate_index = last_sentence.start_char - 1 # Find the index before the beginning of the last sentence
             return text[:truncate_index] # Cut the text at this index
         except Exception as e:
-            debuglog(f"Could not load language. Error: {e}")
+            #debuglog(f"Could not load language. Error: {e}")
             # Fallback to the legacy method
             return truncate_legacy(text)
     else:
-        debuglog("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
+        #debuglog("This language is not supported by spacy. Using legacy method, truncating at last period or newline.")
         #Use the 'legacy' method, of cutting off at the last period or newline character.
         return truncate_legacy(text)
 
@@ -858,7 +858,7 @@ def extract_json(stringwithjson, objectname):
 
     #find the JSON object
     if start == -1 or end == 0:
-        debuglog("Error: JSON object not found")
+        #debuglog("Error: JSON object not found")
         return False
 
     json_string = stringwithjson[start:end]
@@ -869,7 +869,7 @@ def extract_json(stringwithjson, objectname):
         json_string = re.sub(r'\"(\d+)\":', lambda match: '"' + str(match.group(1)) + '":', json_string)
         data = json.loads(json_string)
     except ValueError as e:
-        debuglog(f"Error: Malformed JSON object: {stringwithjson}")
+        #debuglog(f"Error: Malformed JSON object: {stringwithjson}")
         return False
 
     items = []
@@ -877,7 +877,7 @@ def extract_json(stringwithjson, objectname):
     if objectname in data:
         items = data[objectname]
     else:
-        debuglog(f"Error: JSON object doesn't contain \"{objectname}\" array: {stringwithjson}")
+        #debuglog(f"Error: JSON object doesn't contain \"{objectname}\" array: {stringwithjson}")
         return False
 
     #return the result
@@ -896,7 +896,7 @@ def calculate_tokens(string, system_prompt = None):
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
-        debuglog(f"Error using \"{MODEL}\" as encoding model in truncation, falling back to cl100k_base.")
+        #debuglog(f"Error using \"{MODEL}\" as encoding model in truncation, falling back to cl100k_base.")
 
     if system_prompt:
         messages = [
@@ -923,7 +923,7 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
         enc = tiktoken.get_encoding("cl100k_base")
-        debuglog(f"Error using \"{MODEL}\" as encoding model in truncation, falling back to cl100k_base.")
+        #debuglog(f"Error using \"{MODEL}\" as encoding model in truncation, falling back to cl100k_base.")
 
     messages = [
     {"role": "system", "content": system_prompt},
@@ -941,13 +941,13 @@ def truncate_string_to_tokens(string, max_tokens, system_prompt):
     system_tokens = len(enc.encode(system_prompt))
     possible_tokens = MODEL_MAX_TOKEN - max_tokens - system_tokens - base_tokens
     if (num_tokens > possible_tokens):
-        debuglog(f"Length: {str(num_tokens)} tokens. Too long, truncating to {str(possible_tokens)}")
+        #debuglog(f"Length: {str(num_tokens)} tokens. Too long, truncating to {str(possible_tokens)}")
         tokens = enc.encode(string)
         truncated_tokens = tokens[:possible_tokens] # truncate the tokens if they exceed the maximum
         truncated_string = enc.decode(truncated_tokens) # decode the truncated tokens
         return truncated_string
     else:
-        debuglog(f"Length: {str(num_tokens)} tokens. Resuming.")
+        #debuglog(f"Length: {str(num_tokens)} tokens. Resuming.")
         return string
 
 def yes_or_no(string):
@@ -972,7 +972,7 @@ def yes_or_no(string):
 def search_google(query):
     # Initialise the API with your key and search engine
     service = build("customsearch", "v1", developerKey=CUSTOMSEARCH_KEY)
-    debuglog(f"Google search for: \"{query}\"")
+    #debuglog(f"Google search for: \"{query}\"")
     cse = service.cse()
     try:
         # Make a search request to the API
@@ -994,10 +994,10 @@ def search_google(query):
             return results
         else:
             # There were no search results for this query
-            debuglog("No search results for this query.")
+            #debuglog("No search results for this query.")
             return None
     except Exception as e:
-        debuglog(f"Error in Google API query: {e}")
+        #debuglog(f"Error in Google API query: {e}")
         return None
 
 def load_url_text(url):
@@ -1018,10 +1018,10 @@ def load_url_text(url):
             else:
                 return False
     except requests.exceptions.Timeout:
-        debuglog("Request timed out")
+        #debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error ind load_url_text: {e}")
+        #debuglog(f"Request error ind load_url_text: {e}")
         return False
 
 def load_url_content(url):
@@ -1042,10 +1042,10 @@ def load_url_content(url):
             else:
                 return False
     except requests.exceptions.Timeout:
-        debuglog("Request timed out")
+        #debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error in load_url_content: {e}")
+        #debuglog(f"Request error in load_url_content: {e}")
         return False
 
 def replace_newlines(text):
@@ -1065,10 +1065,10 @@ def extract_content(url):
         with requests.head(url, headers=headers, timeout=(3, 8), allow_redirects=True) as response:
             response.raise_for_status()
     except requests.exceptions.Timeout:
-        debuglog("Request timed out")
+        #debuglog("Request timed out")
         return False
     except requests.exceptions.RequestException as e:
-        debuglog(f"Request error in extract_content: {e}")
+        #debuglog(f"Request error in extract_content: {e}")
         return False
     else:
         # process response
@@ -1077,7 +1077,7 @@ def extract_content(url):
         try:
             # Check the status code of the response
             if mimetype is None:
-                debuglog(f"Could not determine mimetype for URL: {url}")
+                #debuglog(f"Could not determine mimetype for URL: {url}")
                 mimetype = response.headers.get("content-type")
 
             if status_code == 200:
@@ -1094,7 +1094,7 @@ def extract_content(url):
                                 extract_text_to_fp(filecontent, outfp, laparams=LAParams())
                                 text = outfp.getvalue().decode('utf-8')
                                 text = replace_newlines(text)
-                                debuglog(f"downloaded pdf file: {text[:300]}") #debug
+                                #debuglog(f"downloaded pdf file: {text[:300]}") #debug
                                 return text[:MAX_FILE_CONTENT]
                 elif "text/html" in mimetype:
                     filecontent = load_url_text(url)
@@ -1103,7 +1103,7 @@ def extract_content(url):
                         # Create a BeautifulSoup object from the HTML string
                         soup = BeautifulSoup(filecontent, "html.parser")
                         html = process_html_content(soup)
-                        debuglog(f"downloaded html file: {html[:300]}") #debug
+                        #debuglog(f"downloaded html file: {html[:300]}") #debug
                         return html
                     else:
                         return False
@@ -1112,7 +1112,7 @@ def extract_content(url):
                     if filecontent:
                         # Process plain text content
                         filecontent = replace_newlines(filecontent)
-                        debuglog(f"downloaded plaintext file: {filecontent[:300]}") #debug
+                        #debuglog(f"downloaded plaintext file: {filecontent[:300]}") #debug
                         return filecontent[:MAX_FILE_CONTENT]
                     else:
                         return False
@@ -1122,7 +1122,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_excel_content(filecontent)
                         if text:
-                            debuglog(f"downloaded excel file: {text[:300]}") #debug
+                            #debuglog(f"downloaded excel file: {text[:300]}") #debug
                             return text
                         else:
                             return False
@@ -1134,7 +1134,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_csv_content(filecontent)
                         if text:
-                            debuglog(f"downloaded csv file: {text[:300]}") #debug
+                            #debuglog(f"downloaded csv file: {text[:300]}") #debug
                             return text
                         else:
                             return False
@@ -1146,7 +1146,7 @@ def extract_content(url):
                     if filecontent:
                         text = process_ppt_content(filecontent)
                         if text:
-                            debuglog(f"downloaded powerpoint file: {text[:300]}") #debug
+                            #debuglog(f"downloaded powerpoint file: {text[:300]}") #debug
                             return text
                         else:
                             return False
@@ -1158,21 +1158,21 @@ def extract_content(url):
                     if filecontent:
                         # Process the file as plain text
                         filecontent = replace_newlines(filecontent)
-                        debuglog(f"downloaded supported file as plaintext: {filecontent[:300]}")  # debug
+                        #debuglog(f"downloaded supported file as plaintext: {filecontent[:300]}")  # debug
                         return filecontent[:MAX_FILE_CONTENT]
                     else:
                         return False
                 else:
                     # The content type is not supported
-                    debuglog(f"Content type '{mimetype}' not supported")
+                    #debuglog(f"Content type '{mimetype}' not supported")
                     return False
             else:
                 # The URL could not be found or there was another error
-                debuglog(f"Error retrieving URL: {status_code}")
+                #debuglog(f"Error retrieving URL: {status_code}")
                 return False
         except Exception as e:
             # There was another error
-            debuglog(f"Error retrieving URL: {e}")
+            #debuglog(f"Error retrieving URL: {e}")
             return False
 
 def process_excel_content(filecontent):
@@ -1184,7 +1184,7 @@ def process_excel_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        debuglog(f"Error processing Excel content: {e}")
+        #debuglog(f"Error processing Excel content: {e}")
         return False
 
 def process_csv_content(filecontent):
@@ -1198,7 +1198,7 @@ def process_csv_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        debuglog(f"Error processing CSV content: {e}")
+        #debuglog(f"Error processing CSV content: {e}")
         return False
 
 def process_ppt_content(filecontent):
@@ -1216,7 +1216,7 @@ def process_ppt_content(filecontent):
             text = replace_newlines(text)
             return text[:MAX_FILE_CONTENT]
     except Exception as e:
-        debuglog(f"Error processing PowerPoint content: {e}")
+        #debuglog(f"Error processing PowerPoint content: {e}")
         return False
 
 def process_html_content(soup):
@@ -1227,7 +1227,7 @@ def process_html_content(soup):
     html = replace_newlines(html)
     return html[:MAX_FILE_CONTENT]
 
-def debuglog(text, create=False):
+def #debuglog(text, create=False):
     try:
         writemode = 'a'
         if create:
