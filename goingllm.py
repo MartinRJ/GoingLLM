@@ -223,7 +223,13 @@ def response_task(usertask, task_id, dogoogleoverride):
                 debuglog("Got search results, generating final results.")
                 #Is the information sufficient?
                 moresearches = do_more_searches(searchresults, usertask, task_id)
-                moresearches = validate_moresearches(moresearches)
+                try:
+                    moresearches = json.loads(moresearches)
+                    moresearches = validate_more_searchresults_json(moresearches)
+                except Exception as e:
+                    debuglog(f"Error in validating moresearches: {e}")
+                    moresearches = None
+
                 if moresearches and not detectNo(moresearches):
                     # More searches
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
@@ -247,20 +253,6 @@ def response_task(usertask, task_id, dogoogleoverride):
     writefile(final_result_code, final_result, task_id)
 
     gc.collect() #Cleanup
-
-def validate_moresearches(response_json):
-    # Returns moresearches if valid, else False
-    valid_json = False
-    try:
-        valid_json = validate_more_searchresults_json(response_json)
-    except ValueError as e:
-        debuglog(f"Error: moresearches-json is in the wrong format. Details: {e}")
-        return False
-    if valid_json:
-        return response_json
-    else:
-        debuglog("Other error with moresearches JSON.")
-        return False
 
 def cleanup(searchresults, usertask, moresearches):
     #Ask GPT which searchresults should be kept, the rest will be removed. Returns the original searchresults on error.
@@ -340,10 +332,9 @@ def check_type(var):
     else:
         return "neither a string, list nor dictionary"
 
-def detectNo(response):
+def detectNo(json_obj):
     #Checks whether the answer to: "do you need more research" was No
     try:
-        json_obj = extract_json_object(response)
         if json_obj is None:
             raise ValueError("No valid JSON object found in the response.")
 
