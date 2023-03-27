@@ -468,7 +468,12 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     return final_result
 
 def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
-    finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    try:
+        finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    except TypeError as e:
+        print(f"Error: {e}", flush=True)
+        print(f"searchresults: {searchresults}", flush=True)
+        raise e  # You can either raise the error to stop execution or handle it accordingly
 
     ##debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
     finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
