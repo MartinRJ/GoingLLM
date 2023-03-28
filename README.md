@@ -163,7 +163,7 @@ Backend and enhancing the Backend for a More Intelligent Tool:
 Testing, Bugs and Error Handling:  
 • Test the tool's handling of Powerpoint and plaintext files.  
 • Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.  
-• Writing unit tests.
+• Writing more unit tests.
 
 
 I have heavily used ChatGPT and Bing Chat to create the POC of this program in less than a day. What a time to be alive!
