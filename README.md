@@ -52,7 +52,7 @@ cx
 [Your Google Custom Search API 'CX' key.]
 
 BODY_MAX_LENGTH  
-16000  
+15000  
 [Absolute max length of the input that the tool will allow.]
 
 FINALRESULT_MAX_TOKEN_LENGTH  
@@ -146,7 +146,6 @@ The token-calculation could be off in future models of gpt-3.5-turbo (calculate_
 Usability, Frontend, New Features:  
 • Allow continuing conversations instead of single prompts only: summarize and process chat history.  
 • Provide feedback to users, such as current search terms, URLs, and status.  
-• Adjust the height for tablets.  
 • Implement ChatML if necessary.  
 • Avoid encoded unicode characters in the final output.  
 • Sources!
@@ -163,7 +162,7 @@ Backend and enhancing the Backend for a More Intelligent Tool:
 Testing, Bugs and Error Handling:  
 • Test the tool's handling of Powerpoint and plaintext files.  
 • Avoid too short remaining max_token values for the summary-generation, because GPT tends to finish unfinished sentences in the prompt.  
-• Writing unit tests.
+• Writing more unit tests.
 
 
 I have heavily used ChatGPT and Bing Chat to create the POC of this program in less than a day. What a time to be alive!
