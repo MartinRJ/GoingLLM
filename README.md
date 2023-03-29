@@ -146,7 +146,6 @@ The token-calculation could be off in future models of gpt-3.5-turbo (calculate_
 Usability, Frontend, New Features:  
 • Allow continuing conversations instead of single prompts only: summarize and process chat history.  
 • Provide feedback to users, such as current search terms, URLs, and status.  
-• Adjust the height for tablets.  
 • Implement ChatML if necessary.  
 • Avoid encoded unicode characters in the final output.  
 • Sources!
