@@ -69,8 +69,14 @@ FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH = "300" # Working (more search require
 
 MESSAGE_MORE_SEARCH_REQUIRED = "More searches required..."
 
-summarytext_start = "\nZusammenfassung der Ergebnisse von \""
-summarytext_end = "\": "
+# Texts:
+summarytext_newline = "\n"
+summarytext_entry_start = "• "
+summarytext_entry_end_URL_start = " ["
+summarytext_entry_URL_end = "]"
+
+SYSTEM_PROMPT_FINAL_QUERY = "I am \"GoingLLM\" or \"Assistant\", your personal assistant for internet research. As input, I receive a summary of a current internal web crawl. You as a user do not know or see this research information from the requests to me, the research is done internally, you will only ever be able to see my answer and your original request (example: >>What time is it?<<). My answer must not contain direct references to the web crawl and the summaries of the results of the same, as the user will not see these. Instead, I should use the information from the web crawl to improve my answer to your query in a factual and precise way, without referring to incomplete sentences or missing information in the summaries. I answer in the language of the original question."
+ASSISTANT_FINAL_QUERY = "Um Ihnen eine angemessene Antwort oder Lösung zu geben, benötige ich weitere Informationen. Könnten Sie bitte mehr Details oder Kontext zu Ihrer Frage oder Aufgabe bereitstellen? Das hilft mir, Ihnen besser zu helfen."
 
 #BASIC AUTHENTICATION
 AUTH_UNAME = os.getenv('AUTH_UNAME')
@@ -180,8 +186,6 @@ def writefile(progress, json_data, task_id):
         print("Could not write file")
 
 def response_task(usertask, task_id, dogoogleoverride):
-    PROMPT_FINAL_QUERY = f"Zu der folgenden Anfrage: >>{usertask}<< wurde eine Google-Recherche durchgeführt, die Ergebnisse findest du im Anschluss. Bitte nutze die Ergebnisse und die Informationen aus einer tiefen Recherche in deinen Datenbanken, um die Anfrage hochprofessionell zu erfüllen.\n\nHier sind die Ergebnisse der Google-Recherche:\n"
-    SYSTEM_PROMPT_FINAL_QUERY = "Ich bin dein persönlicher Assistent mit Internetzugang. Ich bekomme als Input die Ergebnisse einer direkt zuvor durchgeführten internen Google-Recherche. Du als Nutzer kennst und siehst diese Recherche-Informationen aus den Anfragen an mich nicht, die Recherche passiert intern, du wirst immer nur meine Antwort und deine ursprüngliche Anfrage (in spitzen Klammern, Beispiel: >>Wie spät ist es?<<) sehen können. Meine Antwort sollte keine direkten Bezüge zu den Zusammenfassungen enthalten, da der Nutzer diese nicht sieht. Stattdessen sollte ich die Informationen aus der Google-Recherche nutzen, um meine Antwort auf deine Anfrage sachlich und präzise zu verbessern, ohne auf unvollständige Sätze oder fehlende Informationen aus den Zusammenfassungen Bezug zu nehmen."
     # Preprocess user input
     usertask = preprocess_user_input(usertask)
 
@@ -210,7 +214,7 @@ def response_task(usertask, task_id, dogoogleoverride):
             final_result, final_result_code = generate_final_result_without_search(usertask, task_id, True)
         elif valid_keywords(keywords):
             debuglog("Keywords are valid, starting search.")
-            searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+            searchresults = process_keywords_and_search(keywords, usertask, task_id)
             if searchresults == None or not searchresults:
                 if searchresults == None:
                     debuglog("Chatcompletions error in process_keywords_and_search")
@@ -236,10 +240,10 @@ def response_task(usertask, task_id, dogoogleoverride):
                     writefile(FINAL_RESULT_CODE_CONTINUING_CUSTOMSEARCH, MESSAGE_MORE_SEARCH_REQUIRED, task_id)
                     # First clean up
                     searchresults, moresearches = cleanup(searchresults, usertask, moresearches)
-                    more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+                    more_searchresults = process_more_searchresults_response(moresearches, searchresults, usertask, task_id)
                     if more_searchresults:
                         searchresults.append(more_searchresults)
-                final_result = generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+                final_result = generate_final_response_with_search_results(searchresults, usertask, task_id)
                 if final_result == None:
                     debuglog("Chatcompletions error in generate_final_response_with_search_results")
                     final_result_code = FINAL_RESULT_CODE_ERROR_CHATCOMPLETIONS
@@ -363,19 +367,19 @@ def extract_json_object(text):
         debuglog("Error in extract_json_object")
         return None
 
-def process_more_searchresults_response(json_object, searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+def process_more_searchresults_response(json_object, searchresults, usertask, task_id):
     # Calculate remaining tokens
     # Format of the json_object: {"action": ["<Action type 1>", "<Action type 2>"], "keywords": ["<Keyword1>", "<Keyword2>", ...], "documents": ["0", "1", ...], "links": ["<Link1>", "<Link2>", ...]}
     # Action types: "search", "viewDocuments", "openLinks". One action type minimum. Everything else is optional. If "search" is present, the "keywords" key with value(s) must be present. If "viewDocuments" is present, the "documents" key with value(s) must be present. If "openLinks" is present, the "links" key with value(s) must be present.
     try:
-        string = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+        string = ''.join([f'{summarytext_newline}{summarytext_entry_start}{searchresults[i][str(i)]["summary"]}{summarytext_entry_end_URL_start}{searchresults[i][str(i)]["URL"]}{summarytext_entry_URL_end}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
     except TypeError as e:
         debuglog(f"Error in process_more_searchresults_response: {e}")
         debuglog(f"searchresults: {searchresults}", flush=True)
         return searchresults
     added = False
-    current_tokens = calculate_tokens(string, SYSTEM_PROMPT_FINAL_QUERY)
-    remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_start}{summarytext_end}")
+    current_tokens = calculate_tokens(usertask, SYSTEM_PROMPT_FINAL_QUERY, ASSISTANT_FINAL_QUERY, string)
+    remaining_tokens = MODEL_MAX_TOKEN - current_tokens - MAX_TOKENS_FINAL_RESULT - calculate_tokens(f"{summarytext_newline}{summarytext_entry_start}{summarytext_entry_end_URL_start}{summarytext_entry_URL_end}")
 
     if remaining_tokens < MIN_TOKENS_SUMMARIZE_RESULT:
         debuglog(f"Not enough tokens left for another searchresult entry.")
@@ -390,7 +394,7 @@ def process_more_searchresults_response(json_object, searchresults, usertask, ta
         if keywords:
             # Perform the search action with the given keywords
             debuglog(f"Searching for: {keywords}")
-            new_searchresults = process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY)
+            new_searchresults = process_keywords_and_search(keywords, usertask, task_id)
             if new_searchresults == None or not new_searchresults:
                 if new_searchresults == None:
                     debuglog("Chatcompletions error in process_keywords_and_search")
@@ -501,21 +505,21 @@ def generate_final_response_without_search_results(usertask, task_id, regular):
     final_result = chatcompletion_with_timeout(system_prompt, usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
     return final_result
 
-def generate_final_response_with_search_results(searchresults, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+def generate_final_response_with_search_results(searchresults, usertask, task_id):
     try:
-        finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+        finalquery = ''.join([f'{summarytext_newline}{summarytext_entry_start}{searchresults[i][str(i)]["summary"]}{summarytext_entry_end_URL_start}{searchresults[i][str(i)]["URL"]}{summarytext_entry_URL_end}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
     except TypeError as e:
         debuglog(f"Error in generate_final_response_with_search_results: {e}")
         debuglog(f"searchresults: {searchresults}")
         return None
 
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
-    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
+    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
-    final_result = chatcompletion_with_timeout(SYSTEM_PROMPT_FINAL_QUERY, finalquery, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT)
+    final_result = chatcompletion_with_timeout(usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, assistantmessage=ASSISTANT_FINAL_QUERY, prompt2=finalquery)
     return final_result
 
-def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY):
+def process_keywords_and_search(keywords, usertask, task_id):
     with Manager() as manager:
         ALLURLS = manager.dict()
         ALLURLS_lock = Lock()
@@ -525,7 +529,7 @@ def process_keywords_and_search(keywords, usertask, task_id, PROMPT_FINAL_QUERY,
 
         processes = []
         for keyword in keywords:
-            process = Process(target=customsearch, args=(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults))
+            process = Process(target=customsearch, args=(keyword, usertask, task_id, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults))
             process.start()
             processes.append(process)
         
@@ -548,7 +552,7 @@ def fix_key_order(searchresults_list):
         fixed_searchresults_list.append(new_searchresult)
     return fixed_searchresults_list
 
-def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_FINAL_QUERY, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
+def customsearch(keyword, usertask, task_id, counter, counter_lock, ALLURLS, ALLURLS_lock, searchresults):
     search_google_result = search_google(keyword)
     debuglog(f"Search Google result contains the following data: {json.dumps(search_google_result)}") #debug
     if search_google_result is None:
@@ -649,14 +653,14 @@ def customsearch(keyword, usertask, task_id, PROMPT_FINAL_QUERY, SYSTEM_PROMPT_F
         if exists_in_queue:
             continue  # Exists already
 
-        process = Process(target=do_download_and_summary, args=(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weighting, gpturls, keyword, usertask, searchresults, URL, task_id))
+        process = Process(target=do_download_and_summary, args=(weighting, gpturls, keyword, usertask, searchresults, URL, task_id))
         process.start()
         processes.append(process)
 
     for process in processes:
         process.join()
 
-def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weighting, gpturls, keyword, usertask, searchresults, URL, task_id):
+def do_download_and_summary(weighting, gpturls, keyword, usertask, searchresults, URL, task_id):
     #Download file and create a summary, and append to searchresults
     debuglog(f"Here are the URLs: {URL}")
     dlfile = extract_content(URL)
@@ -696,13 +700,11 @@ def do_download_and_summary(SYSTEM_PROMPT_FINAL_QUERY, PROMPT_FINAL_QUERY, weigh
         if max_tokens_completion_summarize < 1:
             max_tokens_completion_summarize = 1 # max_tokens may not be 0
 
-    #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less:
-    text_summary = f"{summarytext_start}{URL}{summarytext_end}"
+    #Calculate if there are enough tokens left for the current max_tokens_completion_summarize value, otherwise use less.
+    #How many tokens are already used up:
+    test_finalquery = ''.join([f'{summarytext_newline}{summarytext_entry_start}{searchresults[i][str(i)]["summary"]}{summarytext_entry_end_URL_start}{searchresults[i][str(i)]["URL"]}{summarytext_entry_URL_end}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
+    sum_results = calculate_tokens(usertask, SYSTEM_PROMPT_FINAL_QUERY, ASSISTANT_FINAL_QUERY, test_finalquery)
 
-    #How many tokens are already used up, take into account the "text_summary" that will be submitted as opening to the summary:
-    test_finalquery = ''.join([PROMPT_FINAL_QUERY] + [f'{summarytext_start}{searchresults[i][str(i)]["URL"]}{summarytext_end}{searchresults[i][str(i)]["summary"]}' for i in range(len(searchresults)) if len(searchresults[i][str(i)]["summary"]) > 0])
-
-    sum_results = calculate_tokens(f"{test_finalquery}{text_summary}", SYSTEM_PROMPT_FINAL_QUERY)
     if MODEL_MAX_TOKEN < sum_results + max_tokens_completion_summarize:
         debuglog(f"Decreasing tokens for summary for: {URL}, not enough tokens left: {str(MODEL_MAX_TOKEN - sum_results)}, requested were {str(max_tokens_completion_summarize)}")
         max_tokens_completion_summarize = MODEL_MAX_TOKEN - sum_results #not enough tokens left for the original number of tokens in max_tokens_completion_summarize, use less
@@ -805,8 +807,20 @@ def preprocess_user_input(usertask):
         usertask = usertask.replace("<<", "»").replace(">>", "«")
     return usertask
 
-def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens):
+def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxtokens, assistantmessage = None, prompt2 = None):
+    # If assistantmessage and prompt2 are present, will create an "ongoing" conversation with prompt as the first usermessage, assistantmessage as the reply, and prompt2 as the second usermessage
     try:
+        messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ]
+        if assistantmessage and prompt2:
+            messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": assistantmessage},
+                    {"role": "user", "content": prompt2}
+                ]
         response = openai.ChatCompletion.create(
         model=MODEL,
         temperature=completiontemperature,
@@ -823,9 +837,9 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
         debuglog(Errormessage)
         return False
 
-def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT):
+def chatcompletion_with_timeout(system_prompt, prompt, completiontemperature, completionmaxtokens, timeout=GLOBAL_CHATCOMPLETION_TIMEOUT, assistantmessage = None, prompt2 = None):
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens)
+        future = executor.submit(chatcompletion, system_prompt, prompt, completiontemperature, completionmaxtokens, assistantmessage, prompt2)
 
         try:
             response = future.result(timeout)
@@ -948,8 +962,9 @@ def calculate_available_tokens(token_reserved_for_response):
     else:
         return MODEL_MAX_TOKEN - token_reserved_for_response
 
-def calculate_tokens(string, system_prompt = None):
+def calculate_tokens(string, system_prompt = None, assistantmessage = None, prompt2 = None):
     # Calculate tokens. Set system_prompt to False to only count a single string, otherwise the entire message will be counted.
+    # If assistantmessage and prompt2 are set, the tokens will be calculated for a 2nd prompt with assistant reply in-between.
     try:
         enc = tiktoken.encoding_for_model(MODEL)
     except KeyError:
@@ -961,6 +976,10 @@ def calculate_tokens(string, system_prompt = None):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": string}
         ]
+        if assistantmessage and prompt2:
+            messages.append({"role": "assistant", "content": assistantmessage})
+            messages.append({"role": "user", "content": prompt2})
+
         num_tokens = 0
         for message in messages:
             num_tokens += 4  # every message follows <im_start>{role/name}\n{content}<im_end>\n
