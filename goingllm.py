@@ -825,7 +825,12 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
                     {"role": "user", "content": prompt2}
                 ]
             debuglog(f"chatcompletion - assistantmessage:\n{assistantmessage}")
-            debuglog(f"chatcompletion - prompt2:\n{prompt2}")
+            #debug
+            lines = prompt2.split('\n')
+            if len(lines) > 1:
+                debuglog(f"chatcompletion - prompt2:\n{lines[0]}\n...\n{lines[-1]}")
+            else:
+                debuglog(f"chatcompletion - prompt2:\n{prompt2}")
         response = openai.ChatCompletion.create(
         model=MODEL,
         temperature=completiontemperature,
