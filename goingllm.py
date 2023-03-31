@@ -438,7 +438,7 @@ def process_more_searchresults_response(json_object, searchresults, usertask, ta
         return False
 
 def validate_more_searchresults_json(response_json):
-    action_types = {"search", "viewDocuments", "openLinks"}
+    action_types = {"search", "viewDocuments", "openLinks", "Nein"}
 
     if not isinstance(response_json, dict):
         raise ValueError("The response JSON object must be a dictionary.")
@@ -453,6 +453,9 @@ def validate_more_searchresults_json(response_json):
     for action in actions:
         if action not in action_types:
             raise ValueError(f"Invalid action: {action}. Action type must be one of the following: {action_types}")
+
+    if "Nein" in actions and len(actions) > 1:
+        raise ValueError("If 'Nein' is present in the 'action' list, it must be the only action.")
 
     if not any(key in response_json for key in ("keywords", "documents", "links")):
         raise ValueError("The response JSON object must have at least one of the following keys: 'keywords', 'documents', 'links'")
