@@ -514,7 +514,7 @@ def generate_final_response_with_search_results(searchresults, usertask, task_id
         return None
 
     #debuglog(f"final query - untruncated: finalquery: \"{finalquery}\", system_prompt: \"{SYSTEM_PROMPT_FINAL_QUERY}\"") #----Debug Output
-    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT)
+    finalquery = truncate_string_to_tokens(finalquery, MAX_TOKENS_FINAL_RESULT, SYSTEM_PROMPT_FINAL_QUERY)
     finalquery = truncate_at_last_period_or_newline(finalquery) # make sure the last summary also ends with period or newline.
     final_result = chatcompletion_with_timeout(usertask, TEMPERATURE_FINAL_RESULT, MAX_TOKENS_FINAL_RESULT, assistantmessage=ASSISTANT_FINAL_QUERY, prompt2=finalquery)
     return final_result
