@@ -824,7 +824,8 @@ def chatcompletion(system_prompt, prompt, completiontemperature, completionmaxto
                     {"role": "assistant", "content": assistantmessage},
                     {"role": "user", "content": prompt2}
                 ]
-            debuglog(f"chatcompletion - assistantmessage:\n{assistantmessage}\nchatcompletion - prompt2:\n{prompt2}")
+            debuglog(f"chatcompletion - assistantmessage:\n{assistantmessage}")
+            debuglog(f"chatcompletion - prompt2:\n{prompt2}")
         response = openai.ChatCompletion.create(
         model=MODEL,
         temperature=completiontemperature,
