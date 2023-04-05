@@ -1,0 +1,25 @@
+First set up the python environment:
+Use the built-in venv module in Python to create a virtual environment. Here's how:
+
+Open a command prompt and navigate to your project directory:
+cd path\to\your\project\directory
+
+Create a virtual environment using the built-in venv module:
+python -m venv venv
+
+Activate the virtual environment:
+On Windows Command Prompt:
+venv\Scripts\activate
+
+On Windows PowerShell:
+venv\Scripts\Activate.ps1
+
+With the virtual environment activated, you can now install the required packages using:
+pip install -r requirements.txt
+
+
+
+
+Then cd into the directory, and run:
+set FLASK_APP=LOCAL
+if the script is called LOCAL.py
