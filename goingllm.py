@@ -104,7 +104,7 @@ def startup():
         #debuglog(f"New task {task_id} started. User prompt: \"{usertask}\"",True)
         threading.Thread(target=response_task, args=(body, task_id, dogoogleoverride)).start()
         writefile("0", False, task_id)
-        response = make_response('', 200)
+        response = make_response(task_id, 200)
         response.headers['task_id'] = task_id
         return response
 
