@@ -23,3 +23,5 @@ pip install -r requirements.txt
 Then cd into the directory, and run:
 set FLASK_APP=LOCAL
 if the script is called LOCAL.py
+Then run the script:
+python LOCAL.py
