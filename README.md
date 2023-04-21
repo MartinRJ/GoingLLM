@@ -17,8 +17,11 @@ It will prompt the ChatGPT API to decide whether or not Google searches will be 
 Then if a Google search is required, the tool will generate further prompts to the ChatGPT API to ask it to create appropriate keywords for the research.  
 Then it will use the Google Custom Search API to perform these searches, download the files temporarily in plaintext, and ask the ChatGPT API to extract the most important data from the results.  
 Finally, it will send the collected result data together with the original prompt or question back to the ChatGPT API and show you the resulting answer.  
-The tool will now prompt the ChatGPT API to weight the Google results by showing it the URL, title and summary, before it downloads it. So that the bot can decide which results it thinks will be most useful to serve the initial request.  
-You now have the option to check the "Always Google" checkbox/override, so the tool will skip the initial question to ChatGPT, whether it thinks that a google research will be useful to serve the initial request, and will do a Google search in any case.
+
+Updates:
+
+• The tool will now prompt the ChatGPT API to weight the Google results by showing it the URL, title and summary, before it downloads it. So that the bot can decide which results it thinks will be most useful to serve the initial request.  
+• You now have the option to check the "Always Google" checkbox/override, so the tool will skip the initial question to ChatGPT, whether it thinks that a google research will be useful to serve the initial request, and will do a Google search in any case.
 
 -----
 ## Setup:
